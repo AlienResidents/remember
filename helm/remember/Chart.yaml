@@ -1,0 +1,17 @@
+apiVersion: v2
+name: remember
+description: REMEMBER - Recursive Enhanced Memory by Enhanced Recall
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - memory
+  - team
+  - mcp
+  - ai
+home: https://github.com/AlienResidents/remember
+sources:
+  - https://github.com/AlienResidents/remember
+maintainers:
+  - name: AlienResidents
+    email: alienresidents@gmail.com
