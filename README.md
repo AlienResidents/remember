@@ -26,6 +26,10 @@ REMEMBER provides a shared memory layer that allows teams to:
 
 A sci-fi themed web interface is included for browsing and managing memories without an AI assistant.
 
+## Knowledge Bundle
+
+System documentation is organized as an [OKF knowledge bundle](okf/index.md) — a structured collection of reference documents covering server architecture, all authentication providers, the full MCP tool surface, database schema, deployment options, and the web UI. Read [okf/index.md](okf/index.md) for a complete walkthrough of how the system works and where to find details on any component.
+
 ## Architecture
 
 ```
@@ -36,24 +40,49 @@ Developer workstations                    Kubernetes Cluster
 │  + CLI tool         │──MCP/HTTPS──▶│  ┌────────────────────┐  │
 └─────────────────────┘              │  │ remember-server    │  │
                                      │  │ (FastMCP, Python)  │  │
-                                     │  │ N replicas, stateless│  │
-                                     │  └─────────┬──────────┘  │
-                                     │            │ SQL         │
-                                     │            ▼             │
-                                     │  ┌────────────────────┐  │
-                                     │  │ remember-db        │  │
-                                     │  │ Postgres + pgvector│  │
-                                     │  └────────────────────┘  │
+                                     │  │ + webui sidecar    │  │
+                                     │  │ N replicas, state- │  │
+                                     │  │ less               │  │
+                                     │  └──────┬───────┬─────┘  │
+                                     │         │       │        │
+                                     │    MCP  │  SQL  │ /      │
+                                     │  (tools) │       │ (web)  │
+                                     │          ▼       ▼        │
+                                     │  ┌────────────────────────┐│
+                                     │  │ remember-db            ││
+                                     │  │ Postgres + pgvector    ││
+                                     │  └────────────────────────┘│
                                      └──────────────────────────┘
 ```
+
+### Components
+
+| Component | Description |
+|-----------|-------------|
+| **AI Assistant** | MCP client (Claude Code, etc.) connecting via Model Context Protocol |
+| **CLI** | Local import/export and management tool |
+| **Web UI** | Sci-fi themed FastAPI interface on port 3000 (sidecar or separate) |
+| **remember-server** | Stateless FastMCP server, horizontally scalable |
+| **remember-db** | Postgres with pgvector for semantic search |
+
+### Authentication
+
+Pluggable auth providers (configured via env vars or YAML):
+- GitHub OAuth, Google OAuth, Microsoft/Entra ID
+- Tailscale identity, Keycloak, Authentik, Dex
+- API keys, dev mode
+
+### Ports
+
+| Port | Service |
+|------|---------|
+| 8000 | MCP server (FastMCP) |
+| 3000 | Web UI (FastAPI) |
+| 9090 | Prometheus metrics |
 
 ## Getting Started
 
 See the [design docs](docs/design.md) for architecture details and the [deployment guide](docs/deployment.md) for setup instructions.
-
-## Knowledge Bundle
-
-System documentation is organized as an [OKF knowledge bundle](okf/index.md) — a structured collection of reference documents covering server architecture, all authentication providers, the full MCP tool surface, database schema, deployment options, and the web UI. Read [okf/index.md](okf/index.md) for a complete walkthrough of how the system works and where to find details on any component.
 
 ## Contributing
 
