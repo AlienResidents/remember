@@ -8,6 +8,17 @@ from fastmcp import FastMCP
 
 from remember.config import settings
 from remember.db import init_db, close_db
+from remember.tools import (
+    search_memories,
+    save_memory,
+    get_memory,
+    list_memories,
+    get_stale_memories,
+    verify_memory,
+    archive_memory,
+    confirm_memory,
+    refute_memory,
+)
 
 logger = logging.getLogger(__name__)
 
