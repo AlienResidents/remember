@@ -6,10 +6,22 @@ from typing import Callable
 from fastmcp import Context
 from pydantic import BaseModel
 
-from remember.auth import AuthProvider, AuthResult, GitHubAuthProvider, APIKeyAuthProvider, DevAuthProvider
-from remember.auth.github import GitHubOAuthConfig, AuthenticationError as GitHubAuthError
-from remember.auth.api_key import APIKeyConfig, AuthenticationError as APIKeyAuthError
+from remember.auth import (
+    AuthProvider,
+    AuthResult,
+    GitHubAuthProvider,
+    APIKeyAuthProvider,
+    DevAuthProvider,
+    TailscaleAuthProvider,
+    GoogleAuthProvider,
+    MicrosoftAuthProvider,
+)
+from remember.auth.github import GitHubOAuthConfig
+from remember.auth.api_key import APIKeyConfig
 from remember.auth.dev import DevAuthConfig
+from remember.auth.tailscale import TailscaleAuthConfig
+from remember.auth.google import GoogleOAuthConfig
+from remember.auth.microsoft import MicrosoftOAuthConfig
 
 
 class AuthMiddleware:
@@ -57,6 +69,21 @@ class AuthMiddleware:
         github_config = config.get("github")
         if github_config:
             providers.append(GitHubAuthProvider(GitHubOAuthConfig(**github_config)))
+
+        # Google OAuth
+        google_config = config.get("google")
+        if google_config:
+            providers.append(GoogleAuthProvider(GoogleOAuthConfig(**google_config)))
+
+        # Microsoft OAuth
+        microsoft_config = config.get("microsoft")
+        if microsoft_config:
+            providers.append(MicrosoftAuthProvider(MicrosoftOAuthConfig(**microsoft_config)))
+
+        # Tailscale
+        tailscale_config = config.get("tailscale")
+        if tailscale_config and tailscale_config.get("enabled"):
+            providers.append(TailscaleAuthProvider(TailscaleAuthConfig(**tailscale_config)))
 
         # API Key
         api_key_config = config.get("api_key")
