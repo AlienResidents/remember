@@ -99,11 +99,13 @@ kubectl get services -l app=remember
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `REMEMBER_DATABASE_URL` | Postgres connection string | Required |
+| `REMEMBER_DATABASE_URL` | Postgres connection string | `postgresql+asyncpg://localhost:5432/remember` |
+| `REMEMBER_SERVER_HOST` | Bind address | `0.0.0.0` |
+| `REMEMBER_SERVER_PORT` | Bind port | `8000` |
+| `REMEMBER_SERVER_WORKERS` | Number of workers | `2` |
 | `REMEMBER_AUTH_DEV_MODE` | Enable dev auth (skip auth) | `false` |
-| `REMEMBER_AUTH_GITHUB_CLIENT_ID` | GitHub OAuth client ID | - |
-| `REMEMBER_AUTH_GITHUB_CLIENT_SECRET` | GitHub OAuth client secret | - |
 | `REMEMBER_SEARCH_TYPE` | Search type (fulltext/hybrid) | `fulltext` |
+| `REMEMBER_SEARCH_DEFAULT_LIMIT` | Default search limit | `10` |
 | `REMEMBER_STALENESS_THRESHOLD_DAYS` | Days before marking as stale | `90` |
 
 ### Database Setup
@@ -124,15 +126,13 @@ alembic upgrade head
 
 ## Monitoring
 
-The server exposes a `/healthz` endpoint for health checks.
+The server exposes:
+- `/healthz` — Health check endpoint
+- `/metrics` — Prometheus metrics (request rate, response latency, tool calls, DB connections)
 
-### Metrics (Phase 2)
+### Helm Values
 
-Future versions will expose Prometheus metrics:
-- Request rate
-- Response latency
-- Error rate
-- Database connection pool stats
+See [helm/remember/values.yaml](../helm/remember/values.yaml) for all configurable options.
 
 ## Upgrading
 

@@ -40,7 +40,7 @@ Developer workstations                    Kubernetes Cluster
 
 2. **`remember-db`** — Postgres cluster with pgvector extension. Can be managed (RDS, CNPG) or self-hosted.
 
-3. **Memory policy plugin** — Integration layer for AI assistants (Claude Code, etc.) that teaches the policy: which memory types are team-scoped, when to proactively search, how to cite ownership.
+3. **Web UI** — Sci-fi themed interface for browsing and managing memories without an AI assistant.
 
 4. **`remember` CLI** — local tool for developers. Import/export memories, manage tags, verify stale entries.
 
@@ -54,7 +54,10 @@ Developer workstations                    Kubernetes Cluster
 
 ## Non-goals (Phase 1)
 
-- Non-assistant clients (web UI). Team uses AI assistants today.
+- Cross-organization sharing or per-memory ACLs. One team, one scope.
+- Multi-cluster or multi-region deployment.
+- Rate limiting, quotas, or abuse prevention.
+- Raw Slack/Jira/git ingestion. That's Phase C.
 - Cross-organization sharing or per-memory ACLs. One team, one scope.
 - Multi-cluster or multi-region deployment.
 - Rate limiting, quotas, or abuse prevention.
@@ -73,21 +76,16 @@ The server maintains no local state. All state lives in Postgres. This enables:
 
 Support multiple identity providers via a pluggable auth layer:
 
-**Phase 1 (MVP):**
+**Implemented:**
 - GitHub OAuth
-- API keys (for CI/CD and automation)
-- Local/dev mode (skip auth for development)
-
-**Phase 2 (later):**
-- Tailscale identity
 - Google OAuth
 - Microsoft/Entra ID
-
-**Phase 3 (self-hosted):**
+- Tailscale identity
+- API keys (for CI/CD and automation)
 - Keycloak
 - Authentik
-- oauth2_proxy
 - Dex
+- Local/dev mode (skip auth for development)
 
 ### Database migrations
 
@@ -187,36 +185,24 @@ Indexes:
 
 ## Configuration
 
-All configuration is via environment variables or config files:
+All configuration is via environment variables (prefixed with `REMEMBER_`) or YAML config files.
 
-```yaml
-# config.yaml
-server:
-  host: "0.0.0.0"
-  port: 8000
-  workers: 2
-  
-auth:
-  providers:
-    - type: github
-      client_id: "${GITHUB_CLIENT_ID}"
-      client_secret: "${GITHUB_CLIENT_SECRET}"
-    - type: api_key
-      enabled: true
-    - type: dev
-      enabled: true  # skip auth for development
-  
-database:
-  url: "${DATABASE_URL}"
-  pool_size: 10
-  
-search:
-  type: "fulltext"  # or "hybrid" for Phase C
-  default_limit: 10
-  
-staleness:
-  threshold_days: 90
-```
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `REMEMBER_DATABASE_URL` | Postgres connection string | `postgresql+asyncpg://localhost:5432/remember` |
+| `REMEMBER_SERVER_HOST` | Bind address | `0.0.0.0` |
+| `REMEMBER_SERVER_PORT` | Bind port | `8000` |
+| `REMEMBER_SERVER_WORKERS` | Number of workers | `2` |
+| `REMEMBER_AUTH_DEV_MODE` | Enable dev auth (skip auth) | `false` |
+| `REMEMBER_SEARCH_TYPE` | Search type (fulltext/hybrid) | `fulltext` |
+| `REMEMBER_SEARCH_DEFAULT_LIMIT` | Default search limit | `10` |
+| `REMEMBER_STALENESS_THRESHOLD_DAYS` | Days before marking as stale | `90` |
+
+### YAML Config
+
+See [config.example.yaml](../../server/config.example.yaml) for the full YAML format.
 
 ## Deployment
 
@@ -230,22 +216,22 @@ staleness:
 Helm chart provided for easy installation:
 
 ```bash
-helm install remember remember/remember \
-  --set auth.providers[0].type=github \
-  --set auth.providers[0].client_id=... \
-  --set database.url=...
+# See docs/deployment.md for full instructions
+helm install remember remember/remember -f my-values.yaml
 ```
 
 ### Local development
 
 ```bash
+cd server
+
 # Using Podman
-podman build -f Dockerfile.podman -t remember-server .
-podman run -p 8000:8000 remember-server
+podman build -f Containerfile -t remember-server:latest .
+podman run -p 8000:8000 -e REMEMBER_AUTH_DEV_MODE=true remember-server:latest
 
 # Using Docker
-docker build -f Dockerfile.docker -t remember-server .
-docker run -p 8000:8000 remember-server
+docker build -f Dockerfile -t remember-server:latest .
+docker run -p 8000:8000 -e REMEMBER_AUTH_DEV_MODE=true remember-server:latest
 ```
 
 ## MCP Tool Surface
@@ -254,59 +240,55 @@ All tools enforce identity-based caller authentication. Write tools enforce owne
 
 ### Read tools
 
-| Tool | Purpose |
-|------|---------|
-| `team_memory_search(query, types?, tags?, limit=10)` | Full-text search. Returns ranked metadata (no body). |
-| `team_memory_get(id)` | Full memory incl. body, history count, confirmations. Logs access. |
-| `team_memory_list(owner?, type?, tag?, status='active', updated_since?)` | Paginated browse. |
-| `team_memory_stale(threshold_days=90)` | Returns memories older than threshold. |
+| Tool | Function | Purpose |
+|------|----------|---------|
+| `search_memories(query, types?, tags?, limit=10)` | `search_memories` | Full-text search. Returns ranked metadata (no body). |
+| `get_memory(id, user_id)` | `get_memory` | Full memory incl. body, history count, confirmations. Logs access. |
+| `list_memories(owner?, type?, tag?, status='active', updated_since?)` | `list_memories` | Paginated browse. |
+| `get_stale_memories(threshold_days=90)` | `get_stale_memories` | Returns memories older than threshold. |
 
 ### Write tools (owner-enforced)
 
-| Tool | Purpose |
-|------|---------|
-| `team_memory_save(name, type, description, body, tags?, import_source?, preserve_created_at?)` | Upsert on `(owner_id, name)`. Previous version → history. Rejects `type` outside `{'project', 'reference'}` at the tool boundary. |
-| `team_memory_verify(id)` | Bump `last_verified_at` without editing body. |
-| `team_memory_archive(id)` | Set `status = 'archived'`. |
+| Tool | Function | Purpose |
+|------|----------|---------|
+| `save_memory(name, type, description, body, owner_id, tags?, import_source?, preserve_created_at?)` | `save_memory` | Upsert on `(owner_id, name)`. Previous version → history. Rejects `type` outside `{'project', 'reference'}` at the tool boundary. |
+| `verify_memory(memory_id, user_id)` | `verify_memory` | Bump `last_verified_at` without editing body. Owner only. |
+| `archive_memory(memory_id, user_id)` | `archive_memory` | Set `status = 'archived'`. Owner only. |
 
 ### Community tools (any user)
 
-| Tool | Purpose |
-|------|---------|
-| `team_memory_confirm(id, note?)` | Add a confirmation row. Raises confidence signal. |
-| `team_memory_refute(id, reason)` | Set `status = 'disputed'`, notify owner via configured channel. |
-
-### Admin tool (Phase 2)
-
-| Tool | Purpose |
-|------|---------|
-| `team_memory_transfer_owner(id, new_owner_user_id)` | Reassign ownership when a user leaves the team. |
+| Tool | Function | Purpose |
+|------|----------|---------|
+| `confirm_memory(memory_id, user_id, note?)` | `confirm_memory` | Add a confirmation row. Removes any existing refutation from the same user. |
+| `refute_memory(memory_id, user_id, reason)` | `refute_memory` | Add a refutation. First refutation sets `status = 'disputed'`. Removes any existing confirmation from the same user. |
 
 ## Phases
 
-### Phase 1 (MVP)
-- [ ] Server skeleton (FastMCP + DB schema)
-- [ ] GitHub OAuth + API keys + dev mode
-- [ ] Podman containerization
-- [ ] Basic K8s manifests (Deployment, Service)
-- [ ] CLI tool (import/export)
-- [ ] Memory policy plugin for AI assistants
+### Phase 1 ✅
+- [x] Server skeleton (FastMCP + DB schema)
+- [x] GitHub OAuth + API keys + dev mode
+- [x] Podman containerization
+- [x] Basic K8s manifests (Deployment, Service, Ingress, HPA, PDB)
+- [x] Alembic migrations
+- [x] Tests
 
-### Phase 2
-- [ ] Helm chart
-- [ ] Ingress/TLS
-- [ ] Auto-scaling
-- [ ] Monitoring/logging
-- [ ] Additional auth providers (Tailscale, Google, Microsoft)
+### Phase 2 ✅
+- [x] Helm chart
+- [x] Ingress/TLS
+- [x] Auto-scaling
+- [x] Prometheus metrics
+- [x] Additional auth providers (Tailscale, Google, Microsoft)
+- [x] pgvector semantic search
+- [x] CLI tool (import/export)
 
-### Phase 3
-- [ ] Self-hosted IdP support (Keycloak, Authentik, Dex)
-- [ ] pgvector integration for semantic search
+### Phase 3 ✅
+- [x] Self-hosted IdP support (Keycloak, Authentik, Dex)
+- [x] Web UI (sci-fi themed)
+- [x] FastAPI REST API
+
+### Phase 4 (Future)
 - [ ] Hybrid RAG system
 - [ ] Slack/Teams notifications
-- [ ] Web UI (optional)
-
-### Phase 4
 - [ ] Multi-cluster deployment
 - [ ] Advanced ACLs
 - [ ] Memory-to-memory relationships

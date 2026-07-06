@@ -7,6 +7,9 @@ from remember.auth.dev import DevAuthProvider
 from remember.auth.tailscale import TailscaleAuthProvider
 from remember.auth.google import GoogleAuthProvider
 from remember.auth.microsoft import MicrosoftAuthProvider
+from remember.auth.keycloak import KeycloakAuthProvider
+from remember.auth.authentik import AuthentikAuthProvider
+from remember.auth.dex import DexAuthProvider
 
 __all__ = [
     "AuthProvider",
@@ -17,4 +20,7 @@ __all__ = [
     "TailscaleAuthProvider",
     "GoogleAuthProvider",
     "MicrosoftAuthProvider",
+    "KeycloakAuthProvider",
+    "AuthentikAuthProvider",
+    "DexAuthProvider",
 ]

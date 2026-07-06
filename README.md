@@ -17,10 +17,14 @@ REMEMBER provides a shared memory layer that allows teams to:
 - **Team-scoped memory** — share knowledge across your team
 - **Ownership-based truth** — creators own their memories, others can confirm/refute
 - **Staleness surfacing** — automatically flags outdated memories
-- **Multiple auth providers** — GitHub OAuth, API keys, Tailscale, Keycloak, and more
+- **Multiple auth providers** — GitHub, Google, Microsoft, Tailscale, Keycloak, Authentik, Dex, API keys, and dev mode
 - **Kubernetes-native** — deploy anywhere with Helm or kubectl
 - **Container-first** — Podman and Docker support
 - **Extensible** — pluggable auth, search, and notification layers
+
+## Web UI
+
+A sci-fi themed web interface is included for browsing and managing memories without an AI assistant.
 
 ## Architecture
 
