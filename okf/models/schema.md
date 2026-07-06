@@ -118,4 +118,4 @@ WHERE m.status = 'active'
 ## Related Concepts
 
 * [Server](../server.md)
-* [Save Tool](tools/save.md)
+* [Save Tool](../tools/save.md)

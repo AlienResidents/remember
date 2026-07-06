@@ -64,7 +64,7 @@ All configuration via environment variables (prefixed `REMEMBER_`) or YAML confi
 | `REMEMBER_SEARCH_TYPE` | Search type | `fulltext` |
 | `REMEMBER_STALENESS_THRESHOLD_DAYS` | Staleness threshold | `90` |
 
-See [config.example.yaml](../../server/config.example.yaml) for full YAML format.
+See [config.example.yaml](../server/config.example.yaml) for full YAML format.
 
 ## Monitoring
 
