@@ -15,6 +15,9 @@ from remember.auth import (
     TailscaleAuthProvider,
     GoogleAuthProvider,
     MicrosoftAuthProvider,
+    KeycloakAuthProvider,
+    AuthentikAuthProvider,
+    DexAuthProvider,
 )
 from remember.auth.github import GitHubOAuthConfig
 from remember.auth.api_key import APIKeyConfig
@@ -22,6 +25,9 @@ from remember.auth.dev import DevAuthConfig
 from remember.auth.tailscale import TailscaleAuthConfig
 from remember.auth.google import GoogleOAuthConfig
 from remember.auth.microsoft import MicrosoftOAuthConfig
+from remember.auth.keycloak import KeycloakConfig
+from remember.auth.authentik import AuthentikConfig
+from remember.auth.dex import DexConfig
 
 
 class AuthMiddleware:
@@ -79,6 +85,21 @@ class AuthMiddleware:
         microsoft_config = config.get("microsoft")
         if microsoft_config:
             providers.append(MicrosoftAuthProvider(MicrosoftOAuthConfig(**microsoft_config)))
+
+        # Keycloak
+        keycloak_config = config.get("keycloak")
+        if keycloak_config and keycloak_config.get("enabled"):
+            providers.append(KeycloakAuthProvider(KeycloakConfig(**keycloak_config)))
+
+        # Authentik
+        authentik_config = config.get("authentik")
+        if authentik_config and authentik_config.get("enabled"):
+            providers.append(AuthentikAuthProvider(AuthentikConfig(**authentik_config)))
+
+        # Dex
+        dex_config = config.get("dex")
+        if dex_config and dex_config.get("enabled"):
+            providers.append(DexAuthProvider(DexConfig(**dex_config)))
 
         # Tailscale
         tailscale_config = config.get("tailscale")
