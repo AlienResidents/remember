@@ -229,6 +229,9 @@ cd server
 podman build -f Containerfile -t remember-server:latest .
 podman run -p 8000:8000 -e REMEMBER_AUTH_DEV_MODE=true remember-server:latest
 
+# Using buildah (if podman has namespace issues)
+buildah build -f Containerfile -t remember-server:latest .
+
 # Using Docker
 docker build -f Dockerfile -t remember-server:latest .
 docker run -p 8000:8000 -e REMEMBER_AUTH_DEV_MODE=true remember-server:latest

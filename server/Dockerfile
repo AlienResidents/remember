@@ -12,8 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy pyproject.toml for dependency installation
-COPY pyproject.toml .
+# Copy pyproject.toml and README for dependency installation
+COPY pyproject.toml README.md .
 
 # Install dependencies
 RUN pip install --no-cache-dir --prefix=/install .

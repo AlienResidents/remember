@@ -17,6 +17,11 @@ podman run -p 8000:8000 \
   remember-server:latest
 ```
 
+> **Note:** If `podman build` fails with "cannot re-exec process to join the existing user namespace", use `buildah` instead (drop-in compatible):
+> ```bash
+> buildah build -f Containerfile -t remember-server:latest .
+> ```
+
 ### Using Docker
 
 ```bash

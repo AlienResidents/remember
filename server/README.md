@@ -1,81 +1,92 @@
-# REMEMBER Server
+# REMEMBER
 
-FastMCP server for team memory storage and retrieval.
+**Recursive Enhanced Memory by Enhanced Recall**
+
+A shared, team-scoped memory system for developer sessions. Stores collective knowledge and makes it available across team members' AI assistant sessions.
+
+## Overview
+
+REMEMBER provides a shared memory layer that allows teams to:
+- Store and retrieve collective knowledge
+- Maintain context across sessions and projects
+- Share insights and learnings across the team
+- Build a persistent organizational memory
 
 ## Features
 
-- **Stateless** — horizontal scaling, zero-downtime deployments
-- **Pluggable auth** — GitHub OAuth, API keys, Tailscale, Keycloak, and more
-- **Full-text + vector search** — built-in full-text search with pgvector for semantic search
-- **Ownership model** — creators own memories, others can confirm/refute
-- **Staleness detection** — automatically flags outdated memories
-- **MCP protocol** — integrates with AI assistants via Model Context Protocol
+- **Team-scoped memory** — share knowledge across your team
+- **Ownership-based truth** — creators own their memories, others can confirm/refute
+- **Staleness surfacing** — automatically flags outdated memories
+- **Multiple auth providers** — GitHub, Google, Microsoft, Tailscale, Keycloak, Authentik, Dex, API keys, and dev mode
+- **Kubernetes-native** — deploy anywhere with Helm or kubectl
+- **Container-first** — Podman and Docker support
+- **Extensible** — pluggable auth, search, and notification layers
+
+## Web UI
+
+A sci-fi themed web interface is included for browsing and managing memories without an AI assistant.
+
+## Knowledge Bundle
+
+System documentation is organized as an [OKF knowledge bundle](okf/index.md) — a structured collection of reference documents covering server architecture, all authentication providers, the full MCP tool surface, database schema, deployment options, and the web UI. Read [okf/index.md](okf/index.md) for a complete walkthrough of how the system works and where to find details on any component.
 
 ## Architecture
 
-The server is a stateless FastMCP application that:
-1. Authenticates callers via configured identity providers
-2. Maps identity to a `users` row in Postgres
-3. Enforces ownership on write operations
-4. Provides read/write tools via MCP
-
-## Setup
-
-See [docs/design.md](../docs/design.md) for full architecture details.
-
-### Prerequisites
-
-- Python 3.11+
-- Postgres 16+ with pgvector extension
-
-### Installation
-
-```bash
-# Clone the repo
-git clone https://github.com/AlienResidents/remember.git
-cd remember/server
-
-# Install dependencies
-pip install -e .
-
-# Run migrations
-alembic upgrade head
-
-# Start the server
-python -m remember.server --config config.yaml
+```
+Developer workstations                    Kubernetes Cluster
+┌─────────────────────┐              ┌──────────────────────────┐
+│ AI Assistant        │              │ namespace: remember      │
+│  + memory plugin    │              │                          │
+│  + CLI tool         │──MCP/HTTPS──▶│  ┌────────────────────┐  │
+└─────────────────────┘              │  │ remember-server    │  │
+                                     │  │ (FastMCP, Python)  │  │
+                                     │  │ + webui sidecar    │  │
+                                     │  │ N replicas, state- │  │
+                                     │  │ less               │  │
+                                     │  └──────┬───────┬─────┘  │
+                                     │         │       │        │
+                                     │    MCP  │  SQL  │ /      │
+                                     │  (tools) │       │ (web)  │
+                                     │          ▼       ▼        │
+                                     │  ┌────────────────────────┐│
+                                     │  │ remember-db            ││
+                                     │  │ Postgres + pgvector    ││
+                                     │  └────────────────────────┘│
+                                     └──────────────────────────┘
 ```
 
-### Configuration
+### Components
 
-See [config.example.yaml](config.example.yaml) for all options.
+| Component | Description |
+|-----------|-------------|
+| **AI Assistant** | MCP client (Claude Code, etc.) connecting via Model Context Protocol |
+| **CLI** | Local import/export and management tool |
+| **Web UI** | Sci-fi themed FastAPI interface on port 3000 (sidecar or separate) |
+| **remember-server** | Stateless FastMCP server, horizontally scalable |
+| **remember-db** | Postgres with pgvector for semantic search |
 
-Key configuration:
-- `server.host` / `server.port` — bind address
-- `auth` — authentication providers (GitHub, Google, Microsoft, Tailscale, Keycloak, Authentik, Dex, API keys, dev mode)
-- `database.url` — Postgres connection string
-- `search.type` — `fulltext` or `hybrid`
-- `staleness.threshold_days` — days before marking as stale (default: 90)
+### Authentication
 
-## Development
+Pluggable auth providers (configured via env vars or YAML):
+- GitHub OAuth, Google OAuth, Microsoft/Entra ID
+- Tailscale identity, Keycloak, Authentik, Dex
+- API keys, dev mode
 
-```bash
-# Run with dev config (skips auth)
-python -m remember.server --config config.dev.yaml
+### Ports
 
-# Run migrations
-alembic upgrade head
+| Port | Service |
+|------|---------|
+| 8000 | MCP server (FastMCP) |
+| 3000 | Web UI (FastAPI) |
+| 9090 | Prometheus metrics |
 
-# Run tests
-pytest
-```
+## Getting Started
 
-## API
+See the [design docs](docs/design.md) for architecture details and the [deployment guide](docs/deployment.md) for setup instructions.
 
-The server exposes tools via MCP (Model Context Protocol) for AI assistant integration.
+## Contributing
 
-A FastAPI web UI is also available at port 3000 for manual browsing and management.
-
-See [docs/design.md](../docs/design.md#mcp-tool-surface) for the full MCP tool list.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
