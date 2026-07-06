@@ -51,6 +51,10 @@ Developer workstations                    Kubernetes Cluster
 
 See the [design docs](docs/design.md) for architecture details and the [deployment guide](docs/deployment.md) for setup instructions.
 
+## Knowledge Bundle
+
+System documentation is organized as an [OKF knowledge bundle](okf/index.md) — a structured collection of reference documents covering server architecture, all authentication providers, the full MCP tool surface, database schema, deployment options, and the web UI. Read [okf/index.md](okf/index.md) for a complete walkthrough of how the system works and where to find details on any component.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
