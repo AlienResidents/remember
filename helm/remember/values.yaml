@@ -63,6 +63,34 @@ env: {}
 #  REMEMBER_SEARCH_TYPE: fulltext
 #  REMEMBER_STALENESS_THRESHOLD_DAYS: "90"
 
+# Web UI
+defaultIndex: true
+webui:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: remember-server
+    pullPolicy: IfNotPresent
+    tag: ""
+  port: 3000
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  ingress:
+    enabled: false
+    className: nginx
+    annotations: {}
+    hosts:
+      - host: remember.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+
 # Node selector
 nodeSelector: {}
 

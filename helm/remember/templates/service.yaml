@@ -11,5 +11,11 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
+    {{- if .Values.webui.enabled }}
+    - port: {{ .Values.webui.port }}
+      targetPort: webui
+      protocol: TCP
+      name: webui
+    {{- end }}
   selector:
     {{- include "remember.selectorLabels" . | nindent 4 }}

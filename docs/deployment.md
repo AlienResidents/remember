@@ -175,3 +175,56 @@ kubectl exec -it <pod> -- python -c "import sqlalchemy; sqlalchemy.create_engine
 ### Auth failures
 
 Check auth provider configuration in secrets/configmap.
+
+## Web UI
+
+The web UI is a separate FastAPI application that serves the sci-fi themed interface on port 3000. It provides REST API endpoints for browsing and managing memories without an AI assistant.
+
+### Local Development
+
+```bash
+cd server
+python -m remember.web
+# Serves on http://localhost:3000
+```
+
+### Kubernetes Deployment
+
+The web UI can be deployed as a separate service or alongside the main server.
+
+#### Option 1: Separate Deployment
+
+```bash
+# Apply web UI manifests
+kubectl apply -f k8s/webui/
+```
+
+#### Option 2: Combined with Main Server
+
+Update the Helm chart to include the web UI in the main deployment (see Helm values).
+
+### Web UI Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `WEBUI_HOST` | Bind address | `0.0.0.0` |
+| `WEBUI_PORT` | Bind port | `3000` |
+
+The web UI shares the same database as the main server and uses the same auth configuration.
+
+### Ingress
+
+Add the web UI to your ingress configuration:
+
+```yaml
+ingress:
+  hosts:
+    - host: remember.example.com
+      paths:
+        - path: /mcp
+          pathType: Prefix
+        - path: /
+          pathType: Prefix
+```
+
+The web UI serves on `/` while the MCP endpoint is on `/mcp`.

@@ -35,7 +35,7 @@ spec:
               service:
                 name: {{ include "remember.fullname" $ }}
                 port:
-                  number: {{ $.Values.server.port }}
+                  number: {{ if eq .path "/mcp" }}{{ $.Values.server.port }}{{ else if eq .path "/" }}{{ $.Values.webui.port }}{{ else }}{{ $.Values.server.port }}{{ end }}
           {{- end }}
     {{- end }}
 {{- end }}

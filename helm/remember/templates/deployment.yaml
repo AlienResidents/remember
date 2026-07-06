@@ -64,3 +64,54 @@ spec:
             capabilities:
               drop:
                 - ALL
+        {{- if .Values.webui.enabled }}
+        - name: webui
+          image: "{{ .Values.webui.image.repository }}:{{ .Values.webui.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.webui.image.pullPolicy }}
+          command: ["python", "-m", "remember.web"]
+          ports:
+            - containerPort: {{ .Values.webui.port }}
+              name: webui
+              protocol: TCP
+          env:
+            - name: REMEMBER_DATABASE_URL
+              value: {{ .Values.database.url | quote }}
+            - name: REMEMBER_AUTH_DEV_MODE
+              value: {{ .Values.auth.devMode | quote }}
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.webui.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: webui
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: webui
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- end }}
