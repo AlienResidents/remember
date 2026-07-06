@@ -43,7 +43,7 @@ async def _search_memories(
     """Internal search implementation."""
     # Build full-text search query
     search_term = f"{' | '.join(query.split())}*"
-    search_expr = func.to_tsvector("english", Memory.name || " " || Memory.description || " " || Memory.body).op("@@")(
+    search_expr = func.to_tsvector("english", func.concat(Memory.name, " ", Memory.description, " ", Memory.body)).op("@@")(
         func.to_tsquery(search_term)
     )
 
