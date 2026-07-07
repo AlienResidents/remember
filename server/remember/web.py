@@ -4,9 +4,8 @@ import json
 from pathlib import Path
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from remember.db import async_session_factory
 from remember.models import Memory
@@ -26,13 +25,11 @@ app = FastAPI(title="REMEMBER Web UI")
 webui_path = Path(__file__).parent.parent / "webui"
 app.mount("/static", StaticFiles(directory=str(webui_path)), name="static")
 
-templates = Jinja2Templates(directory=str(webui_path))
-
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Serve the web UI."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    return FileResponse(str(webui_path / "index.html"))
 
 
 @app.get("/healthz")
