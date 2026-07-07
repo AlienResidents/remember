@@ -1,10 +1,10 @@
 ---
 type: server
 title: REMEMBER Server
-description: Stateless FastMCP server for team memory storage and retrieval. Horizontally scalable with pluggable authentication.
+description: Stateless FastMCP server for team memory storage and retrieval. Horizontally scalable with pluggable authentication. Runs alongside webui sidecar in Kubernetes.
 resource: https://github.com/AlienResidents/remember
-tags: [fastmcp, python, stateless, mcp]
-timestamp: 2026-07-06T00:00:00Z
+tags: [fastmcp, python, stateless, mcp, kubernetes]
+timestamp: 2026-07-07T00:00:00Z
 ---
 
 # REMEMBER Server
@@ -23,14 +23,18 @@ Developer workstations                    Kubernetes Cluster
 │  + CLI tool         │──MCP/HTTPS──▶│  ┌────────────────────┐  │
 └─────────────────────┘              │  │ remember-server    │  │
                                      │  │ (FastMCP, Python)  │  │
-                                     │  │ N replicas, stateless│  │
-                                     │  └─────────┬──────────┘  │
-                                     │            │ SQL         │
-                                     │            ▼             │
-                                     │  ┌────────────────────┐  │
-                                     │  │ remember-db        │  │
-                                     │  │ Postgres + pgvector│  │
-                                     │  └────────────────────┘  │
+                                     │  │ + webui sidecar    │  │
+                                     │  │ N replicas, state- │  │
+                                     │  │ less               │  │
+                                     │  └──────┬───────┬─────┘  │
+                                     │         │       │        │
+                                     │    MCP  │  SQL  │ /      │
+                                     │  (tools) │       │ (web)  │
+                                     │          ▼       ▼        │
+                                     │  ┌────────────────────────┐│
+                                     │  │ remember-db            ││
+                                     │  │ Postgres + pgvector    ││
+                                     │  └────────────────────────┘│
                                      └──────────────────────────┘
 ```
 
@@ -66,11 +70,19 @@ All configuration via environment variables (prefixed `REMEMBER_`) or YAML confi
 
 See [config.example.yaml](../server/config.example.yaml) for full YAML format.
 
+## Ports
+
+| Port | Service |
+|------|---------|
+| 8000 | MCP server (FastMCP) |
+| 3000 | Web UI (FastAPI, sidecar) |
+| 9090 | Prometheus metrics |
+
 ## Monitoring
 
 | Endpoint | Purpose |
 |----------|---------|
-| `/healthz` | Health check |
+| `/healthz` | Health check (both containers) |
 | `/metrics` | Prometheus metrics |
 
 ## Related Concepts

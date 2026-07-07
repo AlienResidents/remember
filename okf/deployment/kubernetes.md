@@ -1,10 +1,10 @@
 ---
 type: deployment
 title: Kubernetes
-description: Kubernetes manifests for production deployment.
+description: Kubernetes manifests for production deployment. Two containers per pod: server (MCP) + webui (sidecar).
 resource: k8s/base/
-tags: [kubernetes, deployment, production]
-timestamp: 2026-07-06T00:00:00Z
+tags: [kubernetes, deployment, production, sidecar]
+timestamp: 2026-07-07T00:00:00Z
 ---
 
 # Kubernetes
@@ -17,12 +17,21 @@ Kubernetes manifests for production deployment. Includes Deployment, Service, In
 
 | Manifest | Purpose |
 |----------|---------|
-| `server-deployment.yaml` | Stateless server deployment (2 replicas default) |
-| `server-service.yaml` | ClusterIP service on port 8000 |
-| `ingress.yaml` | Ingress with `/mcp` path |
+| `server-deployment.yaml` | Deployment with server + webui sidecar containers |
+| `server-service.yaml` | ClusterIP service exposing ports 8000 (MCP) and 3000 (webui) |
+| `ingress.yaml` | Ingress routing `/mcp` → server:8000, `/` → webui:3000 |
 | `hpa.yaml` | Horizontal pod autoscaler (2-10 replicas) |
 | `pdb.yaml` | Pod disruption budget (minAvailable: 1) |
 | `secret-example.yaml` | Secret template (fill in values) |
+
+## Container Architecture
+
+Each pod runs two containers:
+
+| Container | Image Command | Port | Purpose |
+|-----------|---------------|------|---------|
+| `server` | `uvicorn remember.server:app` | 8000 | FastMCP server for AI assistants |
+| `webui` | `python -m remember.web` | 3000 | Sci-fi themed web interface |
 
 ## Deployment
 

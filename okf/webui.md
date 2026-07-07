@@ -1,10 +1,10 @@
 ---
 type: webui
 title: Web Interface
-description: Sci-fi themed FastAPI web UI for browsing and managing memories.
-resource: webui/
-tags: [webui, fastapi, sci-fi]
-timestamp: 2026-07-06T00:00:00Z
+description: Sci-fi themed FastAPI web UI for browsing and managing memories. Runs as sidecar container on port 3000.
+resource: server/webui/
+tags: [webui, fastapi, sci-fi, sidecar]
+timestamp: 2026-07-07T00:00:00Z
 ---
 
 # Web Interface
@@ -31,7 +31,7 @@ Sci-fi themed web interface for browsing and managing memories without an AI ass
 | Backend | FastAPI |
 | Frontend | Vanilla JS, CSS animations |
 | Styling | Custom sci-fi theme (neon cyan/purple) |
-| Fonts | Orbitron (display), Rajdhani (body) |
+| Fonts | Nulshock (display, local), Science Gothic (body, Google Fonts) |
 
 ## Running
 

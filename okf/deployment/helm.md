@@ -1,10 +1,10 @@
 ---
 type: deployment
 title: Helm Chart
-description: Helm chart for easy REMEMBER deployment and configuration.
+description: Helm chart for easy REMEMBER deployment and configuration. Includes webui sidecar and oauth2-proxy integration.
 resource: helm/remember/
-tags: [helm, charts, deployment]
-timestamp: 2026-07-06T00:00:00Z
+tags: [helm, charts, deployment, sidecar, oauth2]
+timestamp: 2026-07-07T00:00:00Z
 ---
 
 # Helm Chart
@@ -39,7 +39,11 @@ helm/remember/
 | `auth.devMode` | Enable dev auth | `false` |
 | `auth.github.enabled` | Enable GitHub OAuth | `false` |
 | `ingress.enabled` | Enable ingress | `true` |
+| `ingress.className` | Ingress class (traefik/nginx) | `nginx` |
+| `ingress.middlewares` | Traefik middlewares (oauth2-proxy, etc.) | `traefik-https-redirect@kubernetescrd` |
 | `database.url` | Database connection string | Required |
+| `webui.enabled` | Enable webui sidecar | `true` |
+| `webui.replicaCount` | Webui replicas | `1` |
 
 ## Install
 
