@@ -1,5 +1,13 @@
 /* REMEMBER Web UI — Sci-Fi Theme */
 
+@font-face {
+    font-family: 'Nulshock';
+    src: url('fonts/Nulshock Bd.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     --bg-primary: #0a0e17;
     --bg-secondary: #111827;
@@ -24,8 +32,8 @@
     --shadow-cyan: 0 0 20px rgba(0, 245, 255, 0.3);
     --shadow-purple: 0 0 20px rgba(180, 0, 255, 0.3);
     
-    --font-display: 'Orbitron', sans-serif;
-    --font-body: 'Rajdhani', sans-serif;
+    --font-display: 'Nulshock', sans-serif;
+    --font-body: 'Science Gothic', sans-serif;
     
     --radius-sm: 4px;
     --radius-md: 8px;

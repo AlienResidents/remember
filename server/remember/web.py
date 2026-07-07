@@ -21,15 +21,10 @@ from remember.tools import (
 
 app = FastAPI(title="REMEMBER Web UI")
 
-# Serve static files
-webui_path = Path(__file__).parent.parent / "webui"
-app.mount("/static", StaticFiles(directory=str(webui_path)), name="static")
-
-
-@app.get("/", response_class=HTMLResponse)
-async def index(request: Request):
-    """Serve the web UI."""
-    return FileResponse(str(webui_path / "index.html"))
+# Serve static files at root (index.html served automatically via html=True)
+# webui_path can be overridden for testing (e.g., tests/dev_test_webui.py)
+app.webui_path = Path(__file__).parent.parent / "webui"
+app.mount("/", StaticFiles(directory=str(app.webui_path), html=True), name="static")
 
 
 @app.get("/healthz")
