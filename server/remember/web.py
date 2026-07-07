@@ -23,7 +23,7 @@ from remember.tools import (
 app = FastAPI(title="REMEMBER Web UI")
 
 # Serve static files
-webui_path = Path(__file__).parent.parent.parent / "webui"
+webui_path = Path(__file__).parent.parent / "webui"
 app.mount("/static", StaticFiles(directory=str(webui_path)), name="static")
 
 templates = Jinja2Templates(directory=str(webui_path))
