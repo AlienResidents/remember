@@ -42,6 +42,7 @@
  *   tool lists.
  */
 
+import { randomUUID } from "node:crypto";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 /**
@@ -302,5 +303,5 @@ async function callRememberTool(
  * Generate a unique session ID for JSON-RPC requests.
  */
 function generateSessionId(): string {
-  return `remember-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  return `remember-${randomUUID()}`;
 }
