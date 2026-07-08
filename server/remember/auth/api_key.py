@@ -1,9 +1,10 @@
 """API key authentication provider."""
 
 import uuid
-import hashlib
 import secrets
 from datetime import datetime, timezone
+
+import bcrypt
 
 from pydantic import BaseModel, Field
 
@@ -41,17 +42,18 @@ class APIKeyAuthProvider(AuthProvider):
         if not api_key:
             raise AuthenticationError("Missing API key")
 
-        # Hash the API key for storage
-        key_hash = self._hash_key(api_key)
-
         # Look up user by API key hash
         async with async_session_factory() as db:
             from sqlalchemy import select
-            stmt = select(User).where(User.provider == "api_key", User.provider_id == key_hash)
+            stmt = select(User).where(User.provider == "api_key")
             result = await db.execute(stmt)
             user = result.scalar_one_or_none()
 
             if not user:
+                raise AuthenticationError("Invalid API key")
+
+            # Verify the API key against stored bcrypt hash
+            if not bcrypt.checkpw(api_key.encode(), user.provider_id.encode()):
                 raise AuthenticationError("Invalid API key")
 
             # Update last seen
@@ -85,13 +87,13 @@ class APIKeyAuthProvider(AuthProvider):
             api_key: Raw API key
 
         Returns:
-            SHA-256 hash of the API key
+            bcrypt hash of the API key (includes per-key salt)
         """
         return self._hash_key(api_key)
 
     def _hash_key(self, key: str) -> str:
-        """Hash an API key."""
-        return hashlib.sha256(key.encode()).hexdigest()
+        """Hash an API key using bcrypt (includes per-key salt)."""
+        return bcrypt.hashpw(key.encode(), bcrypt.gensalt()).decode()
 
 
 class AuthenticationError(Exception):

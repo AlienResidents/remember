@@ -100,11 +100,12 @@ async def test_api_key_generate_and_validate():
 
     # Hash it
     hashed = provider.hash_api_key(key)
-    assert len(hashed) == 64  # SHA-256 hex digest
+    assert isinstance(hashed, str)
+    assert len(hashed) > 0  # bcrypt hash
 
-    # Verify hash is consistent
-    hashed2 = provider.hash_api_key(key)
-    assert hashed == hashed2
+    # Verify hash can verify the original key
+    import bcrypt
+    assert bcrypt.checkpw(key.encode(), hashed.encode())
 
 
 @pytest.mark.asyncio
