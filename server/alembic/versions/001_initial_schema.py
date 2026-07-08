@@ -18,9 +18,6 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Note: pgvector extension requires superuser to install.
-    # For now, use JSONB for embeddings. Upgrade to vector type when pgvector is enabled at cluster level.
-    
     # Create users table
     op.create_table('users',
         sa.Column('id', postgresql.UUID(as_uuid=True), server_default=sa.text('gen_random_uuid()'), primary_key=True),
@@ -44,7 +41,7 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), onupdate=sa.func.now(), nullable=False),
         sa.Column('last_verified_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('embedding', sa.JSON(), nullable=True),
+        sa.Column('embedding', pgvector_Vector(1536), nullable=True),
         sa.Column('import_source', sa.Text(), nullable=True),
         sa.CheckConstraint("type IN ('project', 'reference')", name='memories_type_check'),
         sa.CheckConstraint("status IN ('active', 'archived', 'disputed')", name='memories_status_check'),
@@ -105,5 +102,3 @@ def downgrade() -> None:
     op.drop_table('tags')
     op.drop_table('memories')
     op.drop_table('users')
-    # Note: pgvector extension should be dropped separately if created:
-    # op.execute('DROP EXTENSION IF EXISTS vector')
