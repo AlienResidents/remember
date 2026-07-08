@@ -1,152 +1,309 @@
 #!/usr/bin/env bash
-# detect-drift.bash — Check OKF knowledge bundle for drift against the codebase.
 #
-# Validates:
-#   1. All `resource:` paths in OKF frontmatter point to existing files
-#   2. All markdown link references in OKF files point to existing targets
-#   3. All OKF files are listed in okf/index.md (no orphan docs)
-#   4. All sections in okf/index.md reference existing files
+# detect-drift.bash — OKF drift detector for the remember knowledge bundle.
+#
+# Runs three classes of check and exits non-zero if any drift is found:
+#
+#   1. Orphan / missing concepts
+#      For each source artefact, asserts a matching OKF concept exists:
+#        - server/remember/tools/*.py  -> okf/tools/<name>.md
+#        - server/remember/auth/*.py   -> okf/auth/<name>.md
+#        - server/remember/webui/*     -> okf/webui.md (single concept)
+#        - extension/<name>/           -> okf/extension/<name>.md
+#      Catches "you added a tool/auth/webui/extension file and forgot to
+#      author the concept."
+#
+#   2. Cross-link integrity
+#      For every markdown link inside okf/**/*.md that points to a local
+#      .md file (relative path, not http(s)), asserts the target file
+#      exists. Catches "the concept links to a file you haven't authored
+#      yet" + "you deleted a file but forgot to fix the links pointing at
+#      it."
+#
+# This script does NOT fix drift. It only reports it. The fix is always one
+# of: author the missing concept, or fix the broken link.
+#
+# Usage:
+#   ./detect-drift.bash               # run all checks
+#   ./detect-drift.bash --help
 #
 # Exit codes:
-#   0 — No drift detected
-#   1 — Drift detected (broken references, orphan files, etc.)
+#   0  - No drift found
+#   1  - Drift found (see report above)
+#   100 - Bash version requirement not met
+#   101 - Missing required dependency (git)
 
 set -euo pipefail
 
-OKF_DIR="okf"
-ROOT_DIR="$(git rev-parse --show-toplevel)"
-ERRORS=0
-
-# Colors
-RED='\033[0;31m'
-YELLOW='\033[0;33m'
-GREEN='\033[0;32m'
-NC='\033[0m'
-
-log_error() {
-    echo -e "${RED}ERROR:${NC} $*" >&2
-    ERRORS=$((ERRORS + 1))
-}
-
-log_warn() {
-    echo -e "${YELLOW}WARN:${NC} $*" >&2
-}
-
-log_ok() {
-    echo -e "${GREEN}OK:${NC} $*"
-}
-
-# --- 1. Check resource: paths in frontmatter ---
-echo "Checking resource: paths in OKF frontmatter..."
-
-while IFS= read -r -d '' file; do
-    # Extract resource: line from frontmatter (between --- markers)
-    resource=$(sed -n '/^---$/,/^---$/p' "$file" | grep '^resource:' | head -1 | sed 's/^resource:[[:space:]]*//' || true)
-
-    if [[ -z "$resource" ]]; then
-        continue
-    fi
-
-    # Skip URLs (https://, http://, git@)
-    if [[ "$resource" =~ ^(https?://|git@) ]]; then
-        continue
-    fi
-
-    # Resolve relative to repo root (resource: paths are repo-relative)
-    if [[ "$resource" == /* ]]; then
-        target="$ROOT_DIR$resource"
-    else
-        target="$ROOT_DIR/$resource"
-    fi
-
-    if [[ ! -e "$target" ]]; then
-        log_error "$file: resource '$resource' -> '$target' does not exist"
-    fi
-done < <(find "$ROOT_DIR/$OKF_DIR" -name "*.md" -print0)
-
-# --- 2. Check markdown link references ---
-echo "Checking markdown link references..."
-
-while IFS= read -r -d '' file; do
-    # Extract link targets from [text](path) — skip URLs and anchors
-    link_targets=$(grep -oP '\]\([^)]+\)' "$file" 2>/dev/null | \
-        grep -oP '(?<=\()[^)]+(?=\))' | \
-        grep -v '^#' | \
-        grep -v '^https\?://' | \
-        grep -v '^mailto:' || true)
-
-    if [[ -z "$link_targets" ]]; then
-        continue
-    fi
-
-    while IFS= read -r target; do
-        # Skip external/absolute paths
-        if [[ "$target" =~ ^(https?://|git@|/|ftp://) ]]; then
-            continue
-        fi
-
-        # Resolve relative to the file's directory
-        file_dir=$(dirname "$file")
-        resolved="$file_dir/$target"
-
-        if [[ ! -e "$resolved" ]]; then
-            log_error "$file: link target '$target' -> '$resolved' does not exist"
-        fi
-    done <<< "$link_targets"
-done < <(find "$ROOT_DIR/$OKF_DIR" -name "*.md" -print0)
-
-# --- 3. Check for orphan OKF files (not referenced in index) ---
-echo "Checking for orphan OKF files..."
-
-if [[ -f "$ROOT_DIR/$OKF_DIR/index.md" ]]; then
-    # Get all .md files excluding index.md
-    while IFS= read -r -d '' file; do
-        file_basename=$(basename "$file")
-        if [[ "$file_basename" == "index.md" ]]; then
-            continue
-        fi
-
-        # Check if this file is referenced in index.md (by filename)
-        if ! grep -q "$file_basename" "$ROOT_DIR/$OKF_DIR/index.md"; then
-            rel_path="${file#"$ROOT_DIR"/}"
-            log_warn "$rel_path is not referenced in okf/index.md"
-        fi
-    done < <(find "$ROOT_DIR/$OKF_DIR" -name "*.md" -print0)
+if [[ ${BASH_VERSINFO[0]} -lt 5 ]] || [[ ${BASH_VERSINFO[0]} -eq 5 && ${BASH_VERSINFO[1]} -lt 2 ]]; then
+  echo "Error: Requires bash 5.2+. Current: ${BASH_VERSION}" >&2
+  exit 100
 fi
 
-# --- 4. Check index.md links point to existing files ---
-echo "Checking index.md references..."
+script_path=$(dirname "$(readlink -f "${0}")")
+repo_root=$(cd "${script_path}/.." && pwd -P)
+bundle_root="${repo_root}/okf"
 
-if [[ -f "$ROOT_DIR/$OKF_DIR/index.md" ]]; then
-    link_targets=$(grep -oP '\](?:\([^)]+\))' "$ROOT_DIR/$OKF_DIR/index.md" 2>/dev/null | \
-        grep -oP '(?<=\()[^)]+(?=\))' | \
-        grep -v '^#' | \
-        grep -v '^https\?://' || true)
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
 
-    if [[ -z "$link_targets" ]]; then
-        : # No links to check
-    else
-        while IFS= read -r target; do
-            if [[ "$target" =~ ^(\./|\.\\.\\.|\.\\.\/) ]]; then
-                # Relative path from index.md location
-                resolved="$ROOT_DIR/$OKF_DIR/$target"
-            else
-                resolved="$ROOT_DIR/$OKF_DIR/$target"
-            fi
+while [[ $# -gt 0 ]]; do
+  case "${1}" in
+    -h|--help)
+      sed -n '3,30p' "${0}"
+      exit 0
+      ;;
+    *)
+      echo "Error: Unknown argument: ${1}" >&2
+      exit 1
+      ;;
+  esac
+done
 
-            if [[ ! -e "$resolved" ]]; then
-                log_error "okf/index.md: reference '$target' -> '$resolved' does not exist"
-            fi
-        done <<< "$link_targets"
+# ---------------------------------------------------------------------------
+# Dependencies + working directory
+# ---------------------------------------------------------------------------
+
+for dep in git; do
+  if ! command -v "${dep}" >/dev/null 2>&1; then
+    echo "Error: Required command not found: ${dep}" >&2
+    exit 101
+  fi
+done
+
+if [[ ! -d "${repo_root}/okf" ]]; then
+  echo "Error: okf/ not found at ${repo_root}/okf — run from the repo root." >&2
+  exit 1
+fi
+
+cd "${repo_root}"
+
+# ---------------------------------------------------------------------------
+# Accumulators
+# ---------------------------------------------------------------------------
+
+declare -a drift_findings=()
+
+add_drift() {
+  drift_findings+=("${1}")
+}
+
+# ---------------------------------------------------------------------------
+# Check 1: Orphan / missing concepts
+# ---------------------------------------------------------------------------
+
+check_tools() {
+  echo "  ### Tools"
+  local found_issues=false
+
+  # Missing: tool file exists but no concept.
+  while read -r name; do
+    # Skip __init__.py (package markers, not concepts).
+    [[ "${name}" == "__init__.py" ]] && continue
+    local slug="${name%.py}"
+    if [[ ! -f "okf/tools/${slug}.md" ]]; then
+      add_drift "missing Tool concept: server/remember/tools/${name} exists but okf/tools/${slug}.md does not"
+      echo "  MISSING: okf/tools/${slug}.md (server/remember/tools/${name} exists)"
+      found_issues=true
     fi
-fi
+  done < <(git ls-files -- server/remember/tools/*.py 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
 
-# --- Summary ---
-echo ""
-if [[ $ERRORS -eq 0 ]]; then
-    log_ok "No drift detected. OKF knowledge bundle is consistent."
-    exit 0
-else
-    log_error "$ERRORS drift issue(s) found. Update OKF docs or fix references."
-    exit 1
+  # Orphan: concept exists but no tool file.
+  for f in okf/tools/*.md; do
+    [[ -f "${f}" ]] || continue
+    local slug
+    slug=$(basename "${f}" .md)
+    [[ "${slug}" == "index" || "${slug}" == "overview" ]] && continue
+    if [[ ! -f "server/remember/tools/${slug}.py" ]]; then
+      add_drift "orphan Tool concept: okf/tools/${slug}.md exists but server/remember/tools/${slug}.py does not"
+      echo "  ORPHAN: okf/tools/${slug}.md (no server/remember/tools/${slug}.py)"
+      found_issues=true
+    fi
+  done
+
+  if [[ "${found_issues}" == false ]]; then
+    echo "  OK: all tools have concepts and vice versa."
+  fi
+}
+
+check_auth() {
+  echo "  ### Auth Providers"
+  local found_issues=false
+
+  # Missing: auth file exists but no concept.
+  while read -r name; do
+    # Skip __init__.py (package markers, not concepts).
+    [[ "${name}" == "__init__.py" ]] && continue
+    # Skip base.py (internal base class, not a standalone concept).
+    [[ "${name}" == "base.py" ]] && continue
+    local slug="${name%.py}"
+    if [[ ! -f "okf/auth/${slug}.md" ]]; then
+      add_drift "missing Auth concept: server/remember/auth/${name} exists but okf/auth/${slug}.md does not"
+      echo "  MISSING: okf/auth/${slug}.md (server/remember/auth/${name} exists)"
+      found_issues=true
+    fi
+  done < <(git ls-files -- server/remember/auth/*.py 2>/dev/null | xargs -n1 basename 2>/dev/null || true)
+
+  # Orphan: concept exists but no auth file.
+  for f in okf/auth/*.md; do
+    [[ -f "${f}" ]] || continue
+    local slug
+    slug=$(basename "${f}" .md)
+    [[ "${slug}" == "index" || "${slug}" == "middleware" ]] && continue
+    if [[ ! -f "server/remember/auth/${slug}.py" ]]; then
+      add_drift "orphan Auth concept: okf/auth/${slug}.md exists but server/remember/auth/${slug}.py does not"
+      echo "  ORPHAN: okf/auth/${slug}.md (no server/remember/auth/${slug}.py)"
+      found_issues=true
+    fi
+  done
+
+  if [[ "${found_issues}" == false ]]; then
+    echo "  OK: all auth providers have concepts and vice versa."
+  fi
+}
+
+check_webui() {
+  echo "  ### Web UI"
+  local found_issues=false
+
+  # Web UI has a single concept: okf/webui.md.
+  # Missing: server/webui/ exists but no concept.
+  if [[ -d "server/webui" ]] && [[ ! -f "okf/webui.md" ]]; then
+    add_drift "missing Web UI concept: server/webui/ exists but okf/webui.md does not"
+    echo "  MISSING: okf/webui.md (server/webui/ exists)"
+    found_issues=true
+  fi
+
+  # Orphan: concept exists but no webui dir.
+  if [[ -f "okf/webui.md" ]] && [[ ! -d "server/webui" ]]; then
+    add_drift "orphan Web UI concept: okf/webui.md exists but server/webui/ does not"
+    echo "  ORPHAN: okf/webui.md (no server/webui/)"
+    found_issues=true
+  fi
+
+  if [[ "${found_issues}" == false ]]; then
+    echo "  OK: web UI has concept and vice versa."
+  fi
+}
+
+check_extension() {
+  echo "  ### Extensions"
+  local found_issues=false
+
+  # Extensions: each subdirectory under extension/ gets a concept.
+  while read -r ext_name; do
+    [[ -d "extension/${ext_name}" ]] || continue
+    if [[ ! -f "okf/extension/${ext_name}.md" ]]; then
+      add_drift "missing Extension concept: extension/${ext_name}/ exists but okf/extension/${ext_name}.md does not"
+      echo "  MISSING: okf/extension/${ext_name}.md (extension/${ext_name}/ exists)"
+      found_issues=true
+    fi
+  done < <(git ls-files -- extension/ 2>/dev/null | xargs -n1 dirname 2>/dev/null | xargs -n1 basename 2>/dev/null | sort -u || true)
+
+  # Orphan: concept exists but no extension dir.
+  for f in okf/extension/*.md; do
+    [[ -f "${f}" ]] || continue
+    local slug
+    slug=$(basename "${f}" .md)
+    [[ "${slug}" == "index" ]] && continue
+    if [[ ! -d "extension/${slug}" ]]; then
+      add_drift "orphan Extension concept: okf/extension/${slug}.md exists but extension/${slug}/ does not"
+      echo "  ORPHAN: okf/extension/${slug}.md (no extension/${slug}/)"
+      found_issues=true
+    fi
+  done
+
+  if [[ "${found_issues}" == false ]]; then
+    echo "  OK: all extensions have concepts and vice versa."
+  fi
+}
+
+check_hand_curated() {
+  echo "## Check 1: Orphan / missing concepts"
+  echo
+  check_tools
+  check_auth
+  check_webui
+  check_extension
+  echo
+}
+
+# ---------------------------------------------------------------------------
+# Check 2: Cross-link integrity
+# ---------------------------------------------------------------------------
+
+check_cross_links() {
+  echo "## Check 2: Cross-link integrity"
+  echo
+  local found_issues=false
+  local broken_count=0
+
+  while read -r md_file; do
+    local md_dir
+    md_dir=$(dirname "${md_file}")
+    while read -r link; do
+      local path="${link%%#*}"
+      [[ -z "${path}" ]] && continue
+      local resolved="${md_dir}/${path}"
+      local normalised
+      normalised=$(realpath -m "${resolved}" 2>/dev/null || echo "${resolved}")
+      if [[ ! -e "${normalised}" ]]; then
+        add_drift "broken cross-link in ${md_file#./}: ${link} -> ${normalised#./} (path not found)"
+        echo "  BROKEN: ${md_file#./}: ${link} -> ${normalised#./}"
+        found_issues=true
+        ((++broken_count)) || true
+      fi
+    done < <(
+      grep -oE '\]\([^)]+\)' "${md_file}" 2>/dev/null \
+        | sed -E 's/^\]\(([^)]+)\)$/\1/' \
+        | grep -vE '^(https?://|mailto:|#)' \
+        || true
+    )
+  done < <(find okf -name '*.md' -type f | sort)
+
+  if [[ "${found_issues}" == false ]]; then
+    echo "  OK: all local markdown cross-links resolve."
+  else
+    echo
+    echo "  Total broken cross-links: ${broken_count}"
+  fi
+  echo
+}
+
+# ---------------------------------------------------------------------------
+# Summary
+# ---------------------------------------------------------------------------
+
+print_summary() {
+  echo "========================================"
+  echo "OKF drift summary"
+  echo "========================================"
+  echo "  Drift findings:  ${#drift_findings[@]}"
+  echo
+  if [[ ${#drift_findings[@]} -gt 0 ]]; then
+    echo "Drift findings (must fix):"
+    for f in "${drift_findings[@]}"; do
+      echo "  - ${f}"
+    done
+    echo
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+
+echo "remember OKF drift check"
+echo "  bundle: ${bundle_root}"
+echo "  repo:   ${repo_root}"
+echo
+
+check_hand_curated
+check_cross_links
+print_summary
+
+if [[ ${#drift_findings[@]} -gt 0 ]]; then
+  exit 1
 fi
+exit 0
