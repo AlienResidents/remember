@@ -3,13 +3,13 @@
 import uuid
 from datetime import datetime, timezone
 
-from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
+    JSON,
     Text,
     UniqueConstraint,
     func,
@@ -75,7 +75,7 @@ class Memory(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    embedding: Mapped[Vector | None] = mapped_column(Vector(1536), nullable=True)
+    embedding: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # TODO: Change to Vector(1536) when pgvector extension is enabled at cluster level
     import_source: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
