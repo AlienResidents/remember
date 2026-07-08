@@ -6,6 +6,7 @@
 #   2. All markdown link references in OKF files point to existing targets
 #   3. All OKF files are listed in okf/index.md (no orphan docs)
 #   4. All sections in okf/index.md reference existing files
+#   5. All tracked repo files are referenced in okf/index.md (no undocumented files)
 #
 # Exit codes:
 #   0 — No drift detected
@@ -108,7 +109,7 @@ if [[ -f "$ROOT_DIR/$OKF_DIR/index.md" ]]; then
 
         # Check if this file is referenced in index.md (by filename)
         if ! grep -q "$basename" "$ROOT_DIR/$OKF_DIR/index.md"; then
-            rel_path="${file#$ROOT_DIR/}"
+            rel_path="${file#"$ROOT_DIR"/}"
             log_warn "$rel_path is not referenced in okf/index.md"
         fi
     done < <(find "$ROOT_DIR/$OKF_DIR" -name "*.md" -print0)
@@ -139,6 +140,33 @@ if [[ -f "$ROOT_DIR/$OKF_DIR/index.md" ]]; then
             fi
         done <<< "$link_targets"
     fi
+fi
+
+# --- 5. Check all tracked files are documented in okf/index.md ---
+echo "Checking for undocumented tracked files..."
+
+if [[ -f "$ROOT_DIR/$OKF_DIR/index.md" ]]; then
+    # Get all tracked files via git ls-files (respects .gitignore)
+    while IFS= read -r file; do
+        # Skip OKF directory files (already checked above)
+        if [[ "$file" == okf/* ]]; then
+            continue
+        fi
+
+        # Skip non-markdown files (extensions, configs, etc.)
+        if [[ "$file" != *.md && "$file" != *.ts && "$file" != *.py && "$file" != *.yaml && "$file" != *.yml ]]; then
+            continue
+        fi
+
+        # Check if this file is referenced in index.md
+        basename=$(basename "$file")
+        if ! grep -q "$basename" "$ROOT_DIR/$OKF_DIR/index.md"; then
+            # Check if it's referenced by path
+            if ! grep -q "$file" "$ROOT_DIR/$OKF_DIR/index.md"; then
+                log_warn "$file is not documented in okf/index.md"
+            fi
+        fi
+    done < <(git ls-files)
 fi
 
 # --- Summary ---
