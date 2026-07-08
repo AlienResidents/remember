@@ -5,6 +5,6 @@ repos:
         name: OKF drift detection
         entry: okf/detect-drift.bash
         language: script
-        files: '^okf/.*\.md$'
+        files: '.*'
         pass_filenames: false
         description: Check OKF knowledge bundle for broken references and drift
