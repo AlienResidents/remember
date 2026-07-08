@@ -1,18 +1,21 @@
-# REMEMBER Extension
+# REMEMBER Extensions
 
-Integration layer for AI assistants and team tools.
+Integration layers for AI assistants and team tools.
 
-## Features
+## Extensions
 
-- Seamless memory integration with AI assistants
-- Context-aware memory retrieval
-- Automatic memory suggestions
-- Team collaboration features
+| Extension | Description | Status |
+|-----------|-------------|--------|
+| [Pi Extension](pi/) | Pi coding agent extension that registers REMEMBER MCP tools | ✅ Complete |
 
-## Setup
+### Pi Extension
 
-[To be documented]
+Connects to the REMEMBER MCP server and registers its tools in the pi coding agent. Provides 9 tools for memory management: search, get, list, save, verify, archive, confirm, refute, and stale detection.
 
-## Usage
+**Status:** Ready for use. See [extension/pi/README.md](pi/README.md) for setup instructions.
 
-[To be documented]
+## Roadmap
+
+- [ ] Claude Code extension
+- [ ] VS Code extension
+- [ ] CLI tool (import/export)
