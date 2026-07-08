@@ -11,7 +11,7 @@
 #   0 — No drift detected
 #   1 — Drift detected (broken references, orphan files, etc.)
 
-set -eu
+set -euo pipefail
 
 OKF_DIR="okf"
 ROOT_DIR="$(git rev-parse --show-toplevel)"
@@ -101,14 +101,14 @@ echo "Checking for orphan OKF files..."
 if [[ -f "$ROOT_DIR/$OKF_DIR/index.md" ]]; then
     # Get all .md files excluding index.md
     while IFS= read -r -d '' file; do
-        basename=$(basename "$file")
-        if [[ "$basename" == "index.md" ]]; then
+        file_basename=$(basename "$file")
+        if [[ "$file_basename" == "index.md" ]]; then
             continue
         fi
 
         # Check if this file is referenced in index.md (by filename)
-        if ! grep -q "$basename" "$ROOT_DIR/$OKF_DIR/index.md"; then
-            rel_path="${file#$ROOT_DIR/}"
+        if ! grep -q "$file_basename" "$ROOT_DIR/$OKF_DIR/index.md"; then
+            rel_path="${file#"$ROOT_DIR"/}"
             log_warn "$rel_path is not referenced in okf/index.md"
         fi
     done < <(find "$ROOT_DIR/$OKF_DIR" -name "*.md" -print0)
