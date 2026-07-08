@@ -42,3 +42,6 @@
 
 ### Web UI
 * [Web Interface](webui.md) - Sci-fi themed FastAPI web UI
+
+### Extensions
+* [Pi Extension](extension/pi.md) - Pi coding agent extension for REMEMBER MCP tools
