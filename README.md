@@ -12,6 +12,8 @@ REMEMBER provides a shared memory layer that allows teams to:
 - Share insights and learnings across the team
 - Build a persistent organizational memory
 
+![REMEMBER Web UI](docs/images/remember-webui.png)
+
 ## Features
 
 - **Team-scoped memory** — share knowledge across your team
