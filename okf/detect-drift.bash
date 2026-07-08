@@ -135,8 +135,6 @@ check_auth() {
   while read -r name; do
     # Skip __init__.py (package markers, not concepts).
     [[ "${name}" == "__init__.py" ]] && continue
-    # Skip base.py (internal base class, not a standalone concept).
-    [[ "${name}" == "base.py" ]] && continue
     local slug="${name%.py}"
     if [[ ! -f "okf/auth/${slug}.md" ]]; then
       add_drift "missing Auth concept: server/remember/auth/${name} exists but okf/auth/${slug}.md does not"
