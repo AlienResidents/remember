@@ -36,19 +36,19 @@ Or in `.pi/settings.json`:
 
 ## Installation
 
-Install from the git repo (clones the repo and uses the `extension/pi` subdirectory):
+Install as a pi package (clones the repo and reads `package.json` to find the extension):
 
 ```bash
-pi extension add https://github.com/AlienResidents/remember@main#extension/pi
+pi install git:github.com/AlienResidents/remember@main
 ```
 
-Or add to `.pi/settings.json`:
+Or add to `.pi/agent/settings.json`:
 
 ```json
 {
-  "extensions": {
-    "paths": ["https://github.com/AlienResidents/remember@main#extension/pi"]
-  }
+  "packages": [
+    "git:github.com/AlienResidents/remember@main"
+  ]
 }
 ```
 
