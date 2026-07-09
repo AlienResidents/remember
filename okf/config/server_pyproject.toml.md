@@ -1,0 +1,93 @@
+---
+type: Configuration
+description: "[build-system]"
+resource: server/pyproject.toml
+timestamp: 2026-07-09T01:43:39Z
+---
+
+# pyproject
+
+Source path: `server/pyproject.toml`
+
+## Content
+
+```toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "remember-server"
+version = "0.1.0"
+description = "REMEMBER — Recursive Enhanced Memory by Enhanced Recall"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [
+    { name = "AlienResidents", email = "alienresidents@gmail.com" },
+]
+keywords = ["memory", "team", "mcp", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    "fastmcp>=3.4.3",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.50.1",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.9",
+    "aiofiles>=24.1.0",
+    "sqlalchemy>=2.0.51",
+    "alembic>=1.18.5",
+    "pgvector>=0.4.2",
+    "asyncpg>=0.30.0",
+    "httpx>=0.28.1",
+    "pydantic>=2.13.4",
+    "psycopg2-binary>=2.9.12",
+    "python-dotenv>=1.0.0",
+    "bcrypt>=4.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.11.0",
+]
+
+[project.scripts]
+remember-server = "remember.server:main"
+remember-migrate = "remember.migrations:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["remember"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+```
