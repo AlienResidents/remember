@@ -53,7 +53,7 @@ export default function rememberExtension(pi: ExtensionAPI, ctx: ExtensionContex
   const label = "REMEMBER";
   const baseUrl = process.env.REMEMBER_MCP_URL || "https://remember.cdd.net.au/mcp";
 
-  ctx.log.info(`${label} extension loaded (MCP URL: ${baseUrl})`);
+  console.log(`${label} extension loaded (MCP URL: ${baseUrl})`);
 
   // Register REMEMBER as an MCP server via the mcp extension's
   // connection manager. The mcp extension handles JSON-RPC transport,
