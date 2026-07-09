@@ -1,13 +1,16 @@
 /**
  * MCP client for the REMEMBER server.
  *
+ * The server runs in stateless_http mode (no in-memory sessions), so each
+ * request is standalone — any pod can serve any request. This lets the
+ * server scale horizontally behind a load balancer.
+ *
  * Handles:
  *   - OAuth client_credentials flow with token caching
  *     (credentials read from ~/.pi/agent/auth.json under "remember-mcp")
- *   - MCP streamable HTTP session management
- *     (initialize → capture Mcp-Session-Id → tools/call)
- *   - SSE response parsing
- *   - Automatic token refresh and session re-init on failure
+ *   - MCP streamable HTTP tools/call (stateless — no initialize handshake)
+ *   - SSE + JSON response parsing
+ *   - Automatic token refresh on 401
  */
 
 import { readFileSync } from "node:fs";
@@ -105,9 +108,7 @@ export interface McpToolResult {
 
 export class RememberMcpClient {
   private readonly baseUrl: string;
-  private sessionId: string | null = null;
   private requestCounter = 0;
-  private initPromise: Promise<void> | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
@@ -118,98 +119,16 @@ export class RememberMcpClient {
   }
 
   /**
-   * Initialize the MCP session (handshake).
-   * Safe to call multiple times — concurrent callers share the same promise.
-   */
-  async initialize(): Promise<void> {
-    if (this.initPromise) {
-      await this.initPromise;
-      return;
-    }
-    if (this.sessionId) return;
-
-    this.initPromise = this.doInitialize();
-    try {
-      await this.initPromise;
-    } finally {
-      this.initPromise = null;
-    }
-  }
-
-  private async doInitialize(): Promise<void> {
-    const token = await getAccessToken();
-    const response = await fetch(this.baseUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json, text/event-stream",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: this.nextId(),
-        method: "initialize",
-        params: {
-          protocolVersion: "2024-11-05",
-          capabilities: {},
-          clientInfo: { name: "pi-remember-extension", version: "0.1.0" },
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`MCP initialize failed (${response.status}): ${text.slice(0, 500)}`);
-    }
-
-    // Capture session ID from response header (if the server issues one)
-    this.sessionId = response.headers.get("Mcp-Session-Id");
-    await this.parseResponse(response);
-
-    // Complete the handshake with an initialized notification
-    await this.sendNotification("notifications/initialized");
-    console.log(
-      `REMEMBER MCP session initialized${this.sessionId ? ` (id: ${this.sessionId.slice(0, 8)}…)` : ""}`,
-    );
-  }
-
-  private async sendNotification(method: string): Promise<void> {
-    const token = await getAccessToken();
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
-      Authorization: `Bearer ${token}`,
-    };
-    if (this.sessionId) {
-      headers["Mcp-Session-Id"] = this.sessionId;
-    }
-    // Notifications are fire-and-forget — no response expected
-    await fetch(this.baseUrl, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ jsonrpc: "2.0", method }),
-    });
-  }
-
-  /**
-   * Call a tool on the MCP server.
-   * Handles token refresh (401) and session re-init (stale session) with one retry.
+   * Call a tool on the MCP server (stateless — no session handshake).
+   * Handles token refresh (401) with one retry.
    */
   async callTool(name: string, args: Record<string, unknown>): Promise<McpToolResult> {
-    await this.initialize();
-
     try {
       return await this.callToolInternal(name, args);
     } catch (e) {
       if (isAuthError(e)) {
         // Token expired — refresh and retry
         clearTokenCache();
-        return this.callToolInternal(name, args);
-      }
-      if (isSessionError(e)) {
-        // Session expired — re-init and retry
-        this.sessionId = null;
-        await this.initialize();
         return this.callToolInternal(name, args);
       }
       throw e;
@@ -226,9 +145,6 @@ export class RememberMcpClient {
       Accept: "application/json, text/event-stream",
       Authorization: `Bearer ${token}`,
     };
-    if (this.sessionId) {
-      headers["Mcp-Session-Id"] = this.sessionId;
-    }
 
     const response = await fetch(this.baseUrl, {
       method: "POST",
@@ -322,14 +238,4 @@ export class RememberMcpClient {
 
 function isAuthError(e: unknown): boolean {
   return e instanceof Error && e.message.includes("401");
-}
-
-function isSessionError(e: unknown): boolean {
-  if (!(e instanceof Error)) return false;
-  const msg = e.message.toLowerCase();
-  return (
-    msg.includes("session id") ||
-    msg.includes("session not found") ||
-    msg.includes("invalid session")
-  );
 }

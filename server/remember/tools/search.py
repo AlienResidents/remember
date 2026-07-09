@@ -66,7 +66,7 @@ async def _search_memories(
     stmt = stmt.order_by(search_expr.desc()).limit(limit)
 
     result = await db.execute(stmt)
-    rows = result.all()
+    rows = result.unique().all()
 
     # Group by memory
     memories_dict = {}

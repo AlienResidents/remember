@@ -173,9 +173,14 @@ async def refute_memory(memory_id: str, user_id: str, reason: str) -> dict:
     )
 
 
-# Expose the ASGI app for uvicorn (module:app pattern)
-# Disable host origin protection to allow Traefik to forward requests
-app = mcp.http_app(host_origin_protection=False)
+# Expose the ASGI app for uvicorn (module:app pattern).
+# Disable host origin protection to allow Traefik to forward requests.
+# stateless_http=True: create a fresh transport per request with no in-memory
+# session tracking. This lets the server run behind a load balancer across
+# multiple replicas — any pod can serve any request. Our tools are
+# self-contained (each makes its own DB session), so stateful MCP sessions
+# aren't needed.
+app = mcp.http_app(host_origin_protection=False, stateless_http=True)
 
 
 class _AuthError(Exception):

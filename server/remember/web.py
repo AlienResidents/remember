@@ -22,7 +22,9 @@ import httpx
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import Response
 
 from remember.config import settings
 from remember.db import async_session_factory
@@ -39,14 +41,31 @@ from remember.tools import (
 
 app = FastAPI(title="REMEMBER Web UI")
 
+
+# ---------------------------------------------------------------------------
+# No-cache middleware — ensure browsers always revalidate static assets.
+# StaticFiles sends ETags, so no-cache means a cheap 304 when unchanged
+# and fresh content when updated. Prevents stale app.js after deploys.
+# ---------------------------------------------------------------------------
+
+
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    """Set Cache-Control: no-cache on all responses so browsers revalidate."""
+
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+        return response
+
+
 # Session middleware — signs/encrypts the session cookie
 # In dev mode, use a fixed dummy secret; in production, require a real secret
 _session_secret = settings.auth.session_secret or "dev-only-insecure-secret-change-me"
 app.add_middleware(SessionMiddleware, secret_key=_session_secret, https_only=True, same_site="lax")
+app.add_middleware(NoCacheMiddleware)
 
-# Serve static files at root (index.html served automatically via html=True)
+# Static files — mounted at root AFTER all routes (see bottom of file)
 webui_path = Path(__file__).parent.parent / "webui"
-app.mount("/static", StaticFiles(directory=str(webui_path), html=True), name="static")
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +253,7 @@ async def api_search(
     """Search memories via HTTP API."""
     async with async_session_factory() as db:
         results = await search_memories(
-            query=q,
+            query=query,
             types=[type] if type else None,
             limit=limit,
             db=db,
@@ -332,11 +351,10 @@ async def api_refute(
     return result
 
 
-# Serve index.html at root (after API routes are defined)
-@app.get("/")
-async def index():
-    """Serve the main HTML page."""
-    return RedirectResponse(url="/static/index.html")
+# Serve static files at root (catch-all, AFTER all API/auth routes).
+# html=True means / serves index.html; relative paths (styles.css, app.js)
+# resolve correctly at the root level.
+app.mount("/", StaticFiles(directory=str(webui_path), html=True), name="static")
 
 
 def run_webui(host: str = "0.0.0.0", port: int = 3000):

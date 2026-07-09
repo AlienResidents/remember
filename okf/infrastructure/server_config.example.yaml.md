@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "  host: "0.0.0.0""
 resource: server/config.example.yaml
-timestamp: 2026-07-09T13:05:52Z
+timestamp: 2026-07-09T13:54:49Z
 ---
 
 # config.example

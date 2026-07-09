@@ -2,7 +2,7 @@
 type: Source Code
 description: "/**"
 resource: extension/pi/client.ts
-timestamp: 2026-07-09T13:05:52Z
+timestamp: 2026-07-09T13:54:48Z
 ---
 
 # client
@@ -15,13 +15,16 @@ Source path: `extension/pi/client.ts`
 /**
  * MCP client for the REMEMBER server.
  *
+ * The server runs in stateless_http mode (no in-memory sessions), so each
+ * request is standalone — any pod can serve any request. This lets the
+ * server scale horizontally behind a load balancer.
+ *
  * Handles:
  *   - OAuth client_credentials flow with token caching
  *     (credentials read from ~/.pi/agent/auth.json under "remember-mcp")
- *   - MCP streamable HTTP session management
- *     (initialize → capture Mcp-Session-Id → tools/call)
- *   - SSE response parsing
- *   - Automatic token refresh and session re-init on failure
+ *   - MCP streamable HTTP tools/call (stateless — no initialize handshake)
+ *   - SSE + JSON response parsing
+ *   - Automatic token refresh on 401
  */
 
 import { readFileSync } from "node:fs";
@@ -49,9 +52,6 @@ function readAuthEntry(key: string): AuthEntry {
   const authPath = join(homedir(), ".pi", "agent", "auth.json");
   let raw: string;
   try {
-    raw = readFileSync(authPath, "utf8");
-  } catch {
-    throw new Error(`Cannot read ${authPath} — ensure ~/.pi/agent/auth.json exists`);
 ```
 
 *…truncated — full source at `extension/pi/client.ts`*

@@ -2,7 +2,7 @@
 type: Source Code
 description: "Web UI server for REMEMBER."
 resource: server/remember/web.py
-timestamp: 2026-07-09T13:05:53Z
+timestamp: 2026-07-09T13:54:50Z
 ---
 
 # web
@@ -36,7 +36,9 @@ import httpx
 from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import Response
 
 from remember.config import settings
 from remember.db import async_session_factory
@@ -50,8 +52,6 @@ from remember.tools import (
     archive_memory,
     refute_memory,
 )
-
-app = FastAPI(title="REMEMBER Web UI")
 ```
 
 *…truncated — full source at `server/remember/web.py`*

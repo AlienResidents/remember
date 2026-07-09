@@ -2,7 +2,7 @@
 type: Source Code
 description: "Tests for server startup and health."
 resource: server/tests/test_server.py
-timestamp: 2026-07-09T13:05:54Z
+timestamp: 2026-07-09T13:54:50Z
 ---
 
 # test server

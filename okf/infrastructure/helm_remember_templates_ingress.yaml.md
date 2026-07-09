@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "{{- if .Values.ingress.enabled -}}"
 resource: helm/remember/templates/ingress.yaml
-timestamp: 2026-07-09T13:05:52Z
+timestamp: 2026-07-09T13:54:48Z
 ---
 
 # ingress

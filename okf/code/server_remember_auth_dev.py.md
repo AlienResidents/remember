@@ -2,7 +2,7 @@
 type: Source Code
 description: "Development authentication provider (skip auth)."
 resource: server/remember/auth/dev.py
-timestamp: 2026-07-09T13:05:53Z
+timestamp: 2026-07-09T13:54:49Z
 ---
 
 # dev

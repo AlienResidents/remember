@@ -2,7 +2,7 @@
 type: Source Code
 description: "initial schema"
 resource: server/alembic/versions/001_initial_schema.py
-timestamp: 2026-07-09T13:05:52Z
+timestamp: 2026-07-09T13:54:49Z
 ---
 
 # 001 initial schema

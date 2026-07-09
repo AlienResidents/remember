@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "apiVersion: v2"
 resource: helm/remember/Chart.yaml
-timestamp: 2026-07-09T13:05:52Z
+timestamp: 2026-07-09T13:54:48Z
 ---
 
 # Chart

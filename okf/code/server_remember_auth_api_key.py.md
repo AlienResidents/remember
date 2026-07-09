@@ -2,7 +2,7 @@
 type: Source Code
 description: "API key authentication provider."
 resource: server/remember/auth/api_key.py
-timestamp: 2026-07-09T13:05:53Z
+timestamp: 2026-07-09T13:54:49Z
 ---
 
 # api key

@@ -2,7 +2,7 @@
 type: Source Code
 description: "{{/*"
 resource: helm/remember/templates/_helpers.tpl
-timestamp: 2026-07-09T13:05:52Z
+timestamp: 2026-07-09T13:54:48Z
 ---
 
 #  helpers
