@@ -74,7 +74,7 @@ export default function rememberExtension(pi: ExtensionAPI, ctx: ExtensionContex
         auth: "none" as const,
         enabled: true,
       });
-      ctx.log.info(`${label} registered via mcp extension`);
+      console.log(`${label} registered via mcp extension`);
       return;
     }
   } catch {
@@ -255,7 +255,7 @@ function registerDirectTools(pi: ExtensionAPI, name: string, label: string, base
     });
   }
 
-  ctx.log.info(`${label} extension loaded with ${tools.length} tools`);
+  console.log(`${label} extension loaded with ${tools.length} tools`);
 }
 
 /**
