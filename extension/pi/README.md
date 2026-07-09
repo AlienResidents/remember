@@ -36,10 +36,10 @@ Or in `.pi/settings.json`:
 
 ## Installation
 
-Install via pi's extension mechanism:
+Install from the git repo (clones the repo and uses the `extension/pi` subdirectory):
 
 ```bash
-pi extension add ./extension/pi
+pi extension add https://github.com/AlienResidents/remember@main#extension/pi
 ```
 
 Or add to `.pi/settings.json`:
@@ -47,7 +47,7 @@ Or add to `.pi/settings.json`:
 ```json
 {
   "extensions": {
-    "paths": ["./extension/pi"]
+    "paths": ["https://github.com/AlienResidents/remember@main#extension/pi"]
   }
 }
 ```
