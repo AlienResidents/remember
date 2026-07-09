@@ -2,7 +2,7 @@
 type: Source Code
 description: "Tailscale identity authentication provider."
 resource: server/remember/auth/tailscale.py
-timestamp: 2026-07-09T13:54:50Z
+timestamp: 2026-07-09T14:09:53Z
 ---
 
 # tailscale

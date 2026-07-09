@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "  replicaCount: 2"
 resource: helm/remember/values.yaml
-timestamp: 2026-07-09T13:54:49Z
+timestamp: 2026-07-09T14:09:52Z
 ---
 
 # values

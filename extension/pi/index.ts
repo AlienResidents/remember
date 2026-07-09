@@ -8,10 +8,19 @@
  * and caching itself — it does NOT rely on pi's built-in MCP server
  * configuration in settings.json.
  *
- * The extension implements the MCP streamable HTTP transport directly:
- *   1. OAuth client_credentials → bearer token (cached, auto-refresh)
- *   2. MCP initialize handshake → capture Mcp-Session-Id
- *   3. tools/call → execute and return content
+ * The server runs in stateless_http mode — each tools/call is standalone,
+ * no initialize handshake or session tracking needed.
+ *
+ * Identity resolution (two-tier):
+ *   Option B (primary): read username from ~/.pi/agent/settings.json
+ *     under "remember.username" and inject it as the identity param
+ *     (owner_id / owner / user_id) into every tool call that needs it.
+ *     The LLM never sees these params — they're injected silently.
+ *     The server resolves username → UUID via get-or-create on User
+ *     (provider="keycloak", provider_id=<username>).
+ *   Option A (fallback): if no username configured, calls proceed
+ *     without identity and the server derives it from the JWT azp
+ *     claim via its client_user_mapping config.
  *
  * Tools registered:
  *   remember__search_memories
@@ -23,13 +32,13 @@
  *   remember__archive_memory
  *   remember__confirm_memory
  *   remember__refute_memory
- *
- * State directory:
- *   ~/.pi/agent/state/remember/ — stores connection state and cached
- *   tool lists.
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 import { RememberMcpClient } from "./client";
 
@@ -38,15 +47,43 @@ const PREFIX = "remember__";
 const DEFAULT_URL = "https://remember.cdd.net.au/mcp";
 
 /**
+ * Read the configured username from ~/.pi/agent/settings.json.
+ *
+ * Option B (primary identity injection). Returns null if not configured,
+ * which triggers Option A fallback on the server side.
+ */
+function readConfiguredUsername(): string | null {
+  const envUsername = process.env.REMEMBER_USERNAME;
+  if (envUsername) return envUsername;
+
+  const settingsPath = join(homedir(), ".pi", "agent", "settings.json");
+  try {
+    const raw = readFileSync(settingsPath, "utf8");
+    const settings = JSON.parse(raw) as Record<string, unknown>;
+    const rememberConfig = settings.remember as Record<string, unknown> | undefined;
+    const username = rememberConfig?.username;
+    if (typeof username === "string" && username.length > 0) {
+      return username;
+    }
+  } catch {
+    // Settings file missing or unparseable — fall through to null
+  }
+  return null;
+}
+
+/**
  * Extension factory. Called once when pi loads this extension.
  */
 export default function rememberExtension(pi: ExtensionAPI, _ctx: ExtensionContext) {
   const baseUrl = process.env.REMEMBER_MCP_URL || DEFAULT_URL;
   const client = new RememberMcpClient(baseUrl);
+  const configuredUsername = readConfiguredUsername();
 
-  console.log(`${LABEL} extension loaded (MCP URL: ${baseUrl})`);
+  console.log(
+    `${LABEL} extension loaded (MCP URL: ${baseUrl}, username: ${configuredUsername ?? "<none — server fallback>"})`,
+  );
 
-  registerTools(pi, client);
+  registerTools(pi, client, configuredUsername);
 }
 
 // ---------------------------------------------------------------------------
@@ -60,6 +97,7 @@ interface ToolDef {
   promptSnippet: string;
   parameters: Record<string, unknown>;
   required: string[];
+  identityParam: string | null; // MCP param name to inject username into (null = no injection)
 }
 
 const TOOLS: ToolDef[] = [
@@ -87,6 +125,7 @@ const TOOLS: ToolDef[] = [
       },
     },
     required: ["query"],
+    identityParam: null,
   },
   {
     mcpName: "get_memory",
@@ -98,10 +137,10 @@ const TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         id: { type: "string", description: "Memory ID" },
-        user_id: { type: "string", description: "User ID for access logging" },
       },
     },
     required: ["id"],
+    identityParam: "user_id",
   },
   {
     mcpName: "list_memories",
@@ -111,7 +150,6 @@ const TOOLS: ToolDef[] = [
     parameters: {
       type: "object",
       properties: {
-        owner: { type: "string", description: "Filter by owner" },
         type: { type: "string", description: "Filter by type" },
         tag: { type: "string", description: "Filter by tag" },
         status: { type: "string", description: "Filter by status", default: "active" },
@@ -121,6 +159,7 @@ const TOOLS: ToolDef[] = [
       },
     },
     required: [],
+    identityParam: "owner",
   },
   {
     mcpName: "get_stale_memories",
@@ -138,6 +177,7 @@ const TOOLS: ToolDef[] = [
       },
     },
     required: [],
+    identityParam: null,
   },
   {
     mcpName: "save_memory",
@@ -151,12 +191,12 @@ const TOOLS: ToolDef[] = [
         type: { type: "string", description: "Memory type (project or reference)" },
         description: { type: "string", description: "Brief description" },
         body: { type: "string", description: "Full markdown content" },
-        owner_id: { type: "string", description: "Owner user ID" },
         tags: { type: "array", items: { type: "string" }, description: "Tags" },
         import_source: { type: "string", description: "Import source identifier" },
       },
     },
-    required: ["name", "type", "description", "body", "owner_id"],
+    required: ["name", "type", "description", "body"],
+    identityParam: "owner_id",
   },
   {
     mcpName: "verify_memory",
@@ -167,10 +207,10 @@ const TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         memory_id: { type: "string", description: "Memory ID" },
-        user_id: { type: "string", description: "User ID" },
       },
     },
-    required: ["memory_id", "user_id"],
+    required: ["memory_id"],
+    identityParam: "user_id",
   },
   {
     mcpName: "archive_memory",
@@ -181,10 +221,10 @@ const TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         memory_id: { type: "string", description: "Memory ID" },
-        user_id: { type: "string", description: "User ID" },
       },
     },
-    required: ["memory_id", "user_id"],
+    required: ["memory_id"],
+    identityParam: "user_id",
   },
   {
     mcpName: "confirm_memory",
@@ -195,11 +235,11 @@ const TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         memory_id: { type: "string", description: "Memory ID" },
-        user_id: { type: "string", description: "User ID" },
         note: { type: "string", description: "Confirmation note" },
       },
     },
-    required: ["memory_id", "user_id"],
+    required: ["memory_id"],
+    identityParam: "user_id",
   },
   {
     mcpName: "refute_memory",
@@ -210,15 +250,19 @@ const TOOLS: ToolDef[] = [
       type: "object",
       properties: {
         memory_id: { type: "string", description: "Memory ID" },
-        user_id: { type: "string", description: "User ID" },
         reason: { type: "string", description: "Reason for refutation" },
       },
     },
-    required: ["memory_id", "user_id", "reason"],
+    required: ["memory_id", "reason"],
+    identityParam: "user_id",
   },
 ];
 
-function registerTools(pi: ExtensionAPI, client: RememberMcpClient): void {
+function registerTools(
+  pi: ExtensionAPI,
+  client: RememberMcpClient,
+  username: string | null,
+): void {
   for (const tool of TOOLS) {
     const toolName = `${PREFIX}${tool.mcpName}`;
 
@@ -232,7 +276,16 @@ function registerTools(pi: ExtensionAPI, client: RememberMcpClient): void {
         required: tool.required,
       },
       async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-        const result = await client.callTool(tool.mcpName, params);
+        // Inject configured identity (Option B) into the tool's identity param.
+        // The server resolves username → UUID via get-or-create.
+        // If no username configured, the param stays unset → server falls back
+        // to Option A (derives from JWT azp via client_user_mapping).
+        const finalParams = { ...params };
+        if (username && tool.identityParam) {
+          finalParams[tool.identityParam] = username;
+        }
+
+        const result = await client.callTool(tool.mcpName, finalParams);
 
         // Pass through MCP content blocks directly.
         // The remember server always returns text content.

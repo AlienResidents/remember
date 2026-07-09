@@ -2,7 +2,7 @@
 type: Source Code
 description: "Archive memory tool."
 resource: server/remember/tools/archive.py
-timestamp: 2026-07-09T13:54:50Z
+timestamp: 2026-07-09T14:09:54Z
 ---
 
 # archive

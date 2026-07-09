@@ -2,7 +2,7 @@
 type: Source Code
 description: "Base authentication provider."
 resource: server/remember/auth/base.py
-timestamp: 2026-07-09T13:54:49Z
+timestamp: 2026-07-09T14:09:53Z
 ---
 
 # base

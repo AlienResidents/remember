@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "apiVersion: autoscaling/v2"
 resource: k8s/base/hpa.yaml
-timestamp: 2026-07-09T13:54:49Z
+timestamp: 2026-07-09T14:09:52Z
 ---
 
 # hpa

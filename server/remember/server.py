@@ -5,7 +5,7 @@ import logging
 from contextlib import asynccontextmanager
 
 import jwt
-from fastmcp import FastMCP
+from fastmcp import FastMCP, Context
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -14,8 +14,11 @@ from starlette.routing import Route
 import uuid as uuid_module
 from datetime import datetime
 
+from sqlalchemy import select
+
 from remember.config import settings
-from remember.db import init_db, close_db
+from remember.db import init_db, close_db, async_session_factory
+from remember.models import User
 from remember.tools import (
     search_memories as _search_memories,
     save_memory as _save_memory,
@@ -74,11 +77,12 @@ async def search_memories(
 
 
 @mcp.tool()
-async def get_memory(id: str, user_id: str | None = None) -> dict | None:
+async def get_memory(id: str, user_id: str | None = None, ctx: Context | None = None) -> dict | None:
     """Get full memory including body, history count, and confirmations."""
+    resolved_user_id = await resolve_user_id(user_id, ctx) if user_id else None
     return await _get_memory(
         memory_id=uuid_module.UUID(id),
-        user_id=uuid_module.UUID(user_id) if user_id else None,
+        user_id=resolved_user_id,
     )
 
 
@@ -91,10 +95,12 @@ async def list_memories(
     updated_since: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    ctx: Context | None = None,
 ) -> list[dict]:
     """Browse memories with pagination and filters."""
+    resolved_owner = await resolve_user_id(owner, ctx) if owner else None
     return await _list_memories(
-        owner_id=uuid_module.UUID(owner) if owner else None,
+        owner_id=resolved_owner,
         type=type,
         tag=tag,
         status=status,
@@ -115,61 +121,135 @@ async def save_memory(
     type: str,
     description: str,
     body: str,
-    owner_id: str,
+    owner_id: str | None = None,
     tags: list[str] | None = None,
     import_source: str | None = None,
+    ctx: Context | None = None,
 ) -> dict:
     """Save or update a memory. Owner-only write."""
+    resolved_owner = await resolve_user_id(owner_id, ctx)
     return await _save_memory(
         name=name,
         type=type,
         description=description,
         body=body,
-        owner_id=uuid_module.UUID(owner_id),
+        owner_id=resolved_owner,
         tags=tags,
         import_source=import_source,
     )
 
 
 @mcp.tool()
-async def verify_memory(memory_id: str, user_id: str) -> dict:
+async def verify_memory(memory_id: str, user_id: str | None = None, ctx: Context | None = None) -> dict:
     """Mark a memory as verified. Owner-only."""
+    resolved_user = await resolve_user_id(user_id, ctx)
     return await _verify_memory(
         memory_id=uuid_module.UUID(memory_id),
-        user_id=uuid_module.UUID(user_id),
+        user_id=resolved_user,
     )
 
 
 @mcp.tool()
-async def archive_memory(memory_id: str, user_id: str) -> dict:
+async def archive_memory(memory_id: str, user_id: str | None = None, ctx: Context | None = None) -> dict:
     """Archive a memory. Owner-only."""
+    resolved_user = await resolve_user_id(user_id, ctx)
     return await _archive_memory(
         memory_id=uuid_module.UUID(memory_id),
-        user_id=uuid_module.UUID(user_id),
+        user_id=resolved_user,
     )
 
 
 @mcp.tool()
 async def confirm_memory(
     memory_id: str,
-    user_id: str,
+    user_id: str | None = None,
     note: str | None = None,
+    ctx: Context | None = None,
 ) -> dict:
     """Confirm a memory's accuracy. Any user can confirm."""
+    resolved_user = await resolve_user_id(user_id, ctx)
     return await _confirm_memory(
         memory_id=uuid_module.UUID(memory_id),
-        user_id=uuid_module.UUID(user_id),
+        user_id=resolved_user,
         note=note,
     )
 
 
 @mcp.tool()
-async def refute_memory(memory_id: str, user_id: str, reason: str) -> dict:
+async def refute_memory(memory_id: str, reason: str, user_id: str | None = None, ctx: Context | None = None) -> dict:
     """Refute a memory's accuracy. Any user can refute."""
+    resolved_user = await resolve_user_id(user_id, ctx)
     return await _refute_memory(
         memory_id=uuid_module.UUID(memory_id),
-        user_id=uuid_module.UUID(user_id),
+        user_id=resolved_user,
         reason=reason,
+    )
+
+
+# ---------------------------------------------------------------------------
+# User identity resolution
+# ---------------------------------------------------------------------------
+# Tools accept owner_id/user_id as strings from MCP clients. These can be:
+#   1. A UUID string (from a client that knows the UUID) → parsed directly
+#   2. A username string (from the extension's settings.json injection) →
+#      get-or-create a User by (provider="keycloak", provider_id=username)
+#   3. None (no identity provided) → fallback to request.state.auth_username
+#      which the middleware set from the JWT azp → client_user_mapping (Option A)
+
+
+async def get_or_create_user(username: str) -> uuid_module.UUID:
+    """Get or create a User by keycloak provider_id (username)."""
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(User).where(
+                User.provider == "keycloak",
+                User.provider_id == username,
+            )
+        )
+        user = result.scalar_one_or_none()
+        if user:
+            return user.id
+
+        user = User(
+            provider="keycloak",
+            provider_id=username,
+            display_name=username,
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+        return user.id
+
+
+async def resolve_user_id(
+    identity: str | None,
+    ctx: Context | None = None,
+) -> uuid_module.UUID:
+    """Resolve a user identity string to a UUID.
+
+    See module docstring above for the three-tier resolution flow.
+    """
+    if identity:
+        try:
+            return uuid_module.UUID(identity)
+        except ValueError:
+            # Not a UUID — treat as username, get-or-create
+            return await get_or_create_user(identity)
+
+    # Option A fallback: derive from request state (set by middleware from JWT)
+    if ctx is not None:
+        try:
+            request = ctx.request_context.request
+        except Exception:
+            request = None
+        if request is not None:
+            username = getattr(request.state, "auth_username", "")
+            if username:
+                return await get_or_create_user(username)
+
+    raise ValueError(
+        "No user identity provided and no fallback available "
+        "(configure REMEMBER_AUTH__CLIENT_USER_MAPPING or inject owner_id)"
     )
 
 
@@ -220,7 +300,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         token = auth_header[7:]
 
         try:
-            await self._validate_jwt(token)
+            payload = await self._validate_jwt(token)
         except _AuthError as e:
             return JSONResponse({"error": str(e)}, status_code=401)
         except Exception:
@@ -229,10 +309,19 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
                 status_code=503,
             )
 
+        # Stash fallback username on request state (Option A fallback).
+        # Tools can read this via ctx.request_context.request.state.auth_username
+        # when no explicit owner_id/user_id is provided by the caller.
+        azp = payload.get("azp", "")
+        request.state.auth_username = settings.auth.client_user_mapping.get(azp, "")
+
         return await call_next(request)
 
-    async def _validate_jwt(self, token: str) -> None:
-        """Verify JWT signature and claims using Keycloak JWKS."""
+    async def _validate_jwt(self, token: str) -> dict:
+        """Verify JWT signature and claims using Keycloak JWKS.
+
+        Returns the decoded JWT payload on success.
+        """
         # PyJWKClient fetches JWKS, caches it, and selects the right key by kid
         signing_key = self._get_jwks_client().get_signing_key_from_jwt(token)
 
@@ -255,6 +344,8 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         expected_client = settings.auth.keycloak_client_id
         if expected_client and payload.get("azp") != expected_client:
             raise _AuthError("Token from unauthorized client")
+
+        return payload
 
 
 app.add_middleware(BearerAuthMiddleware)

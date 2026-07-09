@@ -60,6 +60,14 @@ class AuthSettings(BaseSettings):
         default="",
         description="Secret key for signing session cookies (web UI only)",
     )
+    client_user_mapping: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Map Keycloak client ID (azp claim) to username for fallback "
+            "identity resolution. Used when a tool caller doesn't provide "
+            "explicit owner_id/user_id. e.g. {\"remember-pi\": \"chrispy\"}"
+        ),
+    )
 
     @property
     def keycloak_enabled(self) -> bool:

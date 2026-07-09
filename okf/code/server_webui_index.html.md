@@ -2,7 +2,7 @@
 type: Source Code
 description: "<!DOCTYPE html>"
 resource: server/webui/index.html
-timestamp: 2026-07-09T13:54:50Z
+timestamp: 2026-07-09T14:09:54Z
 ---
 
 # index

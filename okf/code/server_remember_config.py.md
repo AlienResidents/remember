@@ -2,7 +2,7 @@
 type: Source Code
 description: "Configuration settings."
 resource: server/remember/config.py
-timestamp: 2026-07-09T13:54:50Z
+timestamp: 2026-07-09T14:09:53Z
 ---
 
 # config

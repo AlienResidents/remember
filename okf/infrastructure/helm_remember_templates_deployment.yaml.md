@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "apiVersion: apps/v1"
 resource: helm/remember/templates/deployment.yaml
-timestamp: 2026-07-09T13:54:48Z
+timestamp: 2026-07-09T14:09:52Z
 ---
 
 # deployment

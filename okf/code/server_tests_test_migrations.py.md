@@ -2,7 +2,7 @@
 type: Source Code
 description: "Tests for database migrations."
 resource: server/tests/test_migrations.py
-timestamp: 2026-07-09T13:54:50Z
+timestamp: 2026-07-09T14:09:54Z
 ---
 
 # test migrations

@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "{{- if .Values.server.pdb.enabled }}"
 resource: helm/remember/templates/pdb.yaml
-timestamp: 2026-07-09T13:54:49Z
+timestamp: 2026-07-09T14:09:52Z
 ---
 
 # pdb

@@ -2,7 +2,7 @@
 type: Source Code
 description: "Web UI server for REMEMBER."
 resource: server/remember/web.py
-timestamp: 2026-07-09T13:54:50Z
+timestamp: 2026-07-09T14:09:54Z
 ---
 
 # web

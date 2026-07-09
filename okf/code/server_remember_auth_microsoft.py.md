@@ -2,7 +2,7 @@
 type: Source Code
 description: "Microsoft/Entra ID OAuth authentication provider."
 resource: server/remember/auth/microsoft.py
-timestamp: 2026-07-09T13:54:49Z
+timestamp: 2026-07-09T14:09:53Z
 ---
 
 # microsoft
