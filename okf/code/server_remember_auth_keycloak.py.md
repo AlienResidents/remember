@@ -2,7 +2,7 @@
 type: Source Code
 description: "Keycloak OAuth authentication provider."
 resource: server/remember/auth/keycloak.py
-timestamp: 2026-07-09T01:43:39Z
+timestamp: 2026-07-09T13:05:53Z
 ---
 
 # keycloak

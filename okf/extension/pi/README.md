@@ -2,7 +2,7 @@
 type: Documentation
 description: "REMEMBER Pi Extension"
 resource: extension/pi/README.md
-timestamp: 2026-07-09T01:43:38Z
+timestamp: 2026-07-09T13:05:52Z
 ---
 
 # README
@@ -49,19 +49,19 @@ Or in `.pi/settings.json`:
 
 ## Installation
 
-Install via pi's extension mechanism:
+Install as a pi package (clones the repo and reads `package.json` to find the extension):
 
 ```bash
-pi extension add ./extension/pi
+pi install git:github.com/AlienResidents/remember@main
 ```
 
-Or add to `.pi/settings.json`:
+Or add to `.pi/agent/settings.json`:
 
 ```json
 {
-  "extensions": {
-    "paths": ["./extension/pi"]
-  }
+  "packages": [
+    "git:github.com/AlienResidents/remember@main"
+  ]
 }
 ```
 

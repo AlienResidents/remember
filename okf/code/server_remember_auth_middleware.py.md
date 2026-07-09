@@ -2,7 +2,7 @@
 type: Source Code
 description: "Authentication middleware."
 resource: server/remember/auth/middleware.py
-timestamp: 2026-07-09T01:43:39Z
+timestamp: 2026-07-09T13:05:53Z
 ---
 
 # middleware

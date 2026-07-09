@@ -2,7 +2,7 @@
 type: Source Code
 description: "Confirm memory tool."
 resource: server/remember/tools/confirm.py
-timestamp: 2026-07-09T01:43:40Z
+timestamp: 2026-07-09T13:05:53Z
 ---
 
 # confirm

@@ -2,7 +2,7 @@
 type: Source Code
 description: "Tests for metrics."
 resource: server/tests/test_metrics.py
-timestamp: 2026-07-09T01:43:40Z
+timestamp: 2026-07-09T13:05:54Z
 ---
 
 # test metrics

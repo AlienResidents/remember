@@ -2,7 +2,7 @@
 type: Source Code
 description: "Authentication providers."
 resource: server/remember/auth/__init__.py
-timestamp: 2026-07-09T01:43:39Z
+timestamp: 2026-07-09T13:05:53Z
 ---
 
 #   init  

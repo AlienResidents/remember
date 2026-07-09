@@ -2,7 +2,7 @@
 type: Source Code
 description: "Tests for web UI endpoints."
 resource: server/tests/test_web.py
-timestamp: 2026-07-09T01:43:40Z
+timestamp: 2026-07-09T13:05:54Z
 ---
 
 # test web

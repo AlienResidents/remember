@@ -1,13 +1,39 @@
 // REMEMBER Web UI — Main Application
 
-const API_BASE = window.location.origin + '/mcp';
+const API_BASE = window.location.origin + '/api';
 
 // State
 let memories = [];
 let currentMemory = null;
 
+// Authenticated fetch wrapper — sends cookies and redirects to /login on 401
+async function apiFetch(url, options = {}) {
+    const response = await fetch(url, {
+        ...options,
+        credentials: 'same-origin',
+    });
+    if (response.status === 401) {
+        window.location.href = '/login';
+        throw new Error('Not authenticated — redirecting to login');
+    }
+    return response;
+}
+
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check auth status — redirect to /login if not authenticated
+    try {
+        const resp = await fetch('/auth/status', { credentials: 'same-origin' });
+        const auth = await resp.json();
+        if (!auth.authenticated) {
+            window.location.href = '/login';
+            return;
+        }
+    } catch {
+        window.location.href = '/login';
+        return;
+    }
+
     initParticles();
     initSearch();
     initCreateForm();
@@ -58,7 +84,7 @@ async function performSearch() {
             ...(status && { status }),
         });
         
-        const response = await fetch(`${API_BASE}/search?${params}`, {
+        const response = await apiFetch(`${API_BASE}/search?${params}`, {
             headers: { 'Accept': 'application/json' }
         });
         
@@ -114,7 +140,7 @@ async function showDetail(memoryId) {
     content.innerHTML = '<div class="loading">Loading...</div>';
     
     try {
-        const response = await fetch(`${API_BASE}/get/${memoryId}`, {
+        const response = await apiFetch(`${API_BASE}/get/${memoryId}`, {
             headers: { 'Accept': 'application/json' }
         });
         
@@ -184,7 +210,7 @@ async function handleCreate(e) {
     };
     
     try {
-        const response = await fetch(`${API_BASE}/save`, {
+        const response = await apiFetch(`${API_BASE}/save`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -220,7 +246,7 @@ async function refuteMemory(id) {
 
 async function performAction(action, id, successMsg, extra = {}) {
     try {
-        const response = await fetch(`${API_BASE}/${action}/${id}`, {
+        const response = await apiFetch(`${API_BASE}/${action}/${id}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(extra)

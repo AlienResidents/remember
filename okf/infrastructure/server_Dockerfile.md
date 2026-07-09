@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "# REMEMBER Server - Docker Dockerfile"
 resource: server/Dockerfile
-timestamp: 2026-07-09T01:43:39Z
+timestamp: 2026-07-09T13:05:52Z
 ---
 
 # Dockerfile
@@ -27,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pyproject.toml and README for dependency installation
-COPY pyproject.toml README.md .
+COPY server/pyproject.toml README.md .
 
 # Install dependencies
 RUN pip install --no-cache-dir --prefix=/install .
@@ -49,9 +49,9 @@ WORKDIR /app
 COPY --from=builder /install /usr/local
 
 # Copy application code
-COPY remember/ ./remember/
-COPY alembic.ini ./
-COPY alembic/ ./alembic/
+COPY server/remember/ ./remember/
+COPY server/alembic.ini ./
+COPY server/alembic/ ./alembic/
 
 # Set ownership
 RUN chown -R remember:remember /app

@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "apiVersion: policy/v1"
 resource: k8s/base/pdb.yaml
-timestamp: 2026-07-09T01:43:39Z
+timestamp: 2026-07-09T13:05:52Z
 ---
 
 # pdb

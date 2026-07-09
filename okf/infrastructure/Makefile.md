@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "# REMEMBER Makefile"
 resource: Makefile
-timestamp: 2026-07-09T01:43:38Z
+timestamp: 2026-07-09T13:05:52Z
 ---
 
 # Makefile
@@ -20,10 +20,10 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 build: ## Build the server container
-	cd server && podman build -f Containerfile -t remember-server:latest . || buildah build -f Containerfile -t remember-server:latest .
+	podman build -f server/Containerfile -t remember-server:latest . || buildah build -f server/Containerfile -t remember-server:latest .
 
 build-docker: ## Build the server container with Docker
-	cd server && docker build -f Dockerfile -t remember-server:latest .
+	docker build -f server/Dockerfile -t remember-server:latest .
 
 test: ## Run tests
 	cd server && pytest tests/ -v

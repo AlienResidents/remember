@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "apiVersion: v1"
 resource: k8s/webui/webui-service.yaml
-timestamp: 2026-07-09T01:43:39Z
+timestamp: 2026-07-09T13:05:52Z
 ---
 
 # webui-service

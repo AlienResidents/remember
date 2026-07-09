@@ -2,7 +2,7 @@
 type: Configuration
 description: "[build-system]"
 resource: server/pyproject.toml
-timestamp: 2026-07-09T01:43:39Z
+timestamp: 2026-07-09T13:05:53Z
 ---
 
 # pyproject
@@ -53,6 +53,8 @@ dependencies = [
     "psycopg2-binary>=2.9.12",
     "python-dotenv>=1.0.0",
     "bcrypt>=4.0.0",
+    "PyJWT[crypto]>=2.8.0",
+    "itsdangerous>=2.1.0",
 ]
 
 [project.optional-dependencies]

@@ -2,7 +2,7 @@
 type: Documentation
 description: "AGENTS.md — AI Agent Guidelines"
 resource: CLAUDE.md
-timestamp: 2026-07-09T01:43:38Z
+timestamp: 2026-07-09T13:05:51Z
 ---
 
 # CLAUDE

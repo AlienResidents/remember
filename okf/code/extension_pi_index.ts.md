@@ -2,7 +2,7 @@
 type: Source Code
 description: "/**"
 resource: extension/pi/index.ts
-timestamp: 2026-07-09T01:43:38Z
+timestamp: 2026-07-09T13:05:52Z
 ---
 
 # index
@@ -17,28 +17,15 @@ Source path: `extension/pi/index.ts`
  *
  * Connects to the REMEMBER MCP server and registers its tools in pi.
  *
- * The REMEMBER server exposes an MCP endpoint (typically at
- * https://remember.cdd.net.au/mcp or via stdio when running locally).
- * This extension uses the existing `mcp` extension's connection
- * management to talk to that endpoint, then registers the tools
- * under the `remember` namespace.
+ * Auth: reads OAuth client_credentials from ~/.pi/agent/auth.json
+ * under the "remember-mcp" key. The extension manages token fetching
+ * and caching itself — it does NOT rely on pi's built-in MCP server
+ * configuration in settings.json.
  *
- * Configuration:
- *   - The REMEMBER MCP server must be configured in `.pi/settings.json`
- *     under the `mcp.servers.remember` key (or globally in
- *     `~/.pi/agent/settings.json`).
- *   - Example:
- *       {
- *         "mcp": {
- *           "servers": {
- *             "remember": {
- *               "transport": "http",
- *               "url": "https://remember.cdd.net.au/mcp",
- *               "auth": "none"
- *             }
- *           }
- *         }
- *       }
+ * The extension implements the MCP streamable HTTP transport directly:
+ *   1. OAuth client_credentials → bearer token (cached, auto-refresh)
+ *   2. MCP initialize handshake → capture Mcp-Session-Id
+ *   3. tools/call → execute and return content
  *
  * Tools registered:
  *   remember__search_memories
@@ -52,6 +39,19 @@ Source path: `extension/pi/index.ts`
  *   remember__refute_memory
  *
  * State directory:
+ *   ~/.pi/agent/state/remember/ — stores connection state and cached
+ *   tool lists.
+ */
+
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+
+import { RememberMcpClient } from "./client";
+
+const LABEL = "REMEMBER";
+const PREFIX = "remember__";
+const DEFAULT_URL = "https://remember.cdd.net.au/mcp";
+
+/**
 ```
 
 *…truncated — full source at `extension/pi/index.ts`*

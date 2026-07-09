@@ -2,7 +2,7 @@
 type: Source Code
 description: "Web UI server for REMEMBER."
 resource: server/remember/web.py
-timestamp: 2026-07-09T01:43:40Z
+timestamp: 2026-07-09T13:05:53Z
 ---
 
 # web
@@ -12,17 +12,35 @@ Source path: `server/remember/web.py`
 ## Content
 
 ```python
-"""Web UI server for REMEMBER."""
+"""Web UI server for REMEMBER.
+
+Browser-based OAuth flow via Keycloak (authorization_code grant):
+  1. User visits / → static UI shell loads (no sensitive data)
+  2. JS calls /api/* → 401 if not authenticated → JS redirects to /login
+  3. /login → redirect to Keycloak authorization endpoint
+  4. User logs in at Keycloak → redirected back to /auth/callback
+  5. /auth/callback → exchange code for tokens → store in session cookie → redirect /
+  6. JS retries /api/* with session cookie → succeeds
+
+Session cookies are signed + encrypted by SessionMiddleware using session_secret.
+Access tokens are stored in the session and used for DB operations.
+"""
 
 import json
+import os
+import uuid
 from pathlib import Path
+from urllib.parse import urlencode
 
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+import httpx
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
+from remember.config import settings
 from remember.db import async_session_factory
-from remember.models import Memory
+from remember.models import User
 from remember.tools import (
     search_memories,
     save_memory,
@@ -34,24 +52,6 @@ from remember.tools import (
 )
 
 app = FastAPI(title="REMEMBER Web UI")
-
-# Serve static files at root (index.html served automatically via html=True)
-# webui_path can be overridden for testing (e.g., tests/dev_test_webui.py)
-app.webui_path = Path(__file__).parent.parent / "webui"
-app.mount("/", StaticFiles(directory=str(app.webui_path), html=True), name="static")
-
-
-@app.get("/healthz")
-async def healthz():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "remember-webui"}
-
-
-@app.get("/api/search")
-async def api_search(
-    q: str,
-    type: str | None = None,
-    status: str | None = None,
 ```
 
 *…truncated — full source at `server/remember/web.py`*

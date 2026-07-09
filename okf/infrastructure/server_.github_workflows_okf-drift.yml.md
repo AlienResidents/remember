@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "name: OKF Drift Detection"
 resource: server/.github/workflows/okf-drift.yml
-timestamp: 2026-07-09T01:43:39Z
+timestamp: 2026-07-09T13:05:52Z
 ---
 
 # okf-drift

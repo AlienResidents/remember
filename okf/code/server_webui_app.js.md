@@ -2,7 +2,7 @@
 type: Source Code
 description: "// REMEMBER Web UI — Main Application"
 resource: server/webui/app.js
-timestamp: 2026-07-09T01:43:40Z
+timestamp: 2026-07-09T13:05:54Z
 ---
 
 # app
@@ -14,44 +14,44 @@ Source path: `server/webui/app.js`
 ```javascript
 // REMEMBER Web UI — Main Application
 
-const API_BASE = window.location.origin + '/mcp';
+const API_BASE = window.location.origin + '/api';
 
 // State
 let memories = [];
 let currentMemory = null;
 
+// Authenticated fetch wrapper — sends cookies and redirects to /login on 401
+async function apiFetch(url, options = {}) {
+    const response = await fetch(url, {
+        ...options,
+        credentials: 'same-origin',
+    });
+    if (response.status === 401) {
+        window.location.href = '/login';
+        throw new Error('Not authenticated — redirecting to login');
+    }
+    return response;
+}
+
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // Check auth status — redirect to /login if not authenticated
+    try {
+        const resp = await fetch('/auth/status', { credentials: 'same-origin' });
+        const auth = await resp.json();
+        if (!auth.authenticated) {
+            window.location.href = '/login';
+            return;
+        }
+    } catch {
+        window.location.href = '/login';
+        return;
+    }
+
     initParticles();
     initSearch();
     initCreateForm();
     initThemeToggle();
-});
-
-// Particle background
-function initParticles() {
-    const container = document.getElementById('particles');
-    for (let i = 0; i < 50; i++) {
-        const particle = document.createElement('div');
-        particle.className = 'particle';
-        particle.style.left = Math.random() * 100 + '%';
-        particle.style.animationDelay = Math.random() * 15 + 's';
-        particle.style.animationDuration = (10 + Math.random() * 10) + 's';
-        container.appendChild(particle);
-    }
-}
-
-// Search
-function initSearch() {
-    const searchBtn = document.getElementById('search-btn');
-    const searchInput = document.getElementById('search-input');
-    
-    searchBtn.addEventListener('click', performSearch);
-    searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') performSearch();
-    });
-}
-
 ```
 
 *…truncated — full source at `server/webui/app.js`*

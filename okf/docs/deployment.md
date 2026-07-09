@@ -2,7 +2,7 @@
 type: Documentation
 description: "REMEMBER Deployment Guide"
 resource: docs/deployment.md
-timestamp: 2026-07-09T01:43:38Z
+timestamp: 2026-07-09T13:05:52Z
 ---
 
 # deployment
