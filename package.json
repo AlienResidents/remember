@@ -4,6 +4,6 @@
   "description": "Team memory system for AI assistant sessions",
   "keywords": ["pi-package", "remember", "memory", "team"],
   "pi": {
-    "extensions": ["extension/pi"]
+    "extensions": ["./extension/pi"]
   }
 }
