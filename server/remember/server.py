@@ -102,15 +102,21 @@ async def list_memories(
 ) -> list[dict]:
     """Browse memories with pagination and filters."""
     owner_id = await resolve_user_id(ctx)
-    # L8: Cap limit to prevent unbounded queries (DoS / resource exhaustion)
+    # L8: Cap limit AND offset independently to prevent DoS via deep pagination.
+    # Previously passed `limit=capped_limit + offset`, which let an attacker
+    # bypass the limit cap by sending a huge offset (e.g. limit=1, offset=999999
+    # → DB queried 1,000,000 rows). Now cap offset separately and pass both
+    # to the underlying query which uses SQLAlchemy .offset() for real pagination.
     capped_limit = min(limit, 500)
+    capped_offset = min(offset, 10_000)
     return await _list_memories(
         owner_id=owner_id,
         type=type,
         tag=tag,
         status=status,
         updated_since=datetime.fromisoformat(updated_since) if updated_since else None,
-        limit=capped_limit + offset,
+        limit=capped_limit,
+        offset=capped_offset,
     )
 
 

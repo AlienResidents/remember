@@ -16,6 +16,7 @@ async def list_memories(
     status: str = "active",
     updated_since: datetime | None = None,
     limit: int = 50,
+    offset: int = 0,
     db: AsyncSession | None = None,
 ) -> list[dict]:
     """List memories with filters.
@@ -27,6 +28,7 @@ async def list_memories(
         status: Filter by status (active, archived, disputed)
         updated_since: Filter by last updated date
         limit: Maximum results
+        offset: Pagination offset (number of rows to skip)
         db: Database session
 
     Returns:
@@ -34,8 +36,8 @@ async def list_memories(
     """
     if db is None:
         async with async_session_factory() as db:
-            return await _list_memories(owner_id, type, tag, status, updated_since, limit, db)
-    return await _list_memories(owner_id, type, tag, status, updated_since, limit, db)
+            return await _list_memories(owner_id, type, tag, status, updated_since, limit, offset, db)
+    return await _list_memories(owner_id, type, tag, status, updated_since, limit, offset, db)
 
 
 async def _list_memories(
@@ -45,6 +47,7 @@ async def _list_memories(
     status: str,
     updated_since: datetime | None,
     limit: int,
+    offset: int,
     db: AsyncSession,
 ) -> list[dict]:
     """Internal list implementation."""
@@ -69,7 +72,7 @@ async def _list_memories(
             .where(Tag.name == tag)
         )
 
-    stmt = stmt.order_by(Memory.updated_at.desc()).limit(limit)
+    stmt = stmt.order_by(Memory.updated_at.desc()).limit(limit).offset(offset)
 
     result = await db.execute(stmt)
     memories = result.scalars().all()

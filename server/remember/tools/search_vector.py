@@ -12,6 +12,7 @@ async def search_memories_vector(
     query_embedding: list[float],
     limit: int = 10,
     threshold: float = 0.5,
+    owner_id: uuid.UUID | None = None,
     db: AsyncSession | None = None,
 ) -> list[dict]:
     """Search memories using vector similarity.
@@ -20,6 +21,7 @@ async def search_memories_vector(
         query_embedding: Query vector (1536 dimensions for text-embedding-3-small)
         limit: Maximum results
         threshold: Minimum similarity score (0-1)
+        owner_id: Filter by owner (security: scope to authenticated user)
         db: Database session
 
     Returns:
@@ -27,14 +29,15 @@ async def search_memories_vector(
     """
     if db is None:
         async with async_session_factory() as db:
-            return await _search_memories_vector(query_embedding, limit, threshold, db)
-    return await _search_memories_vector(query_embedding, limit, threshold, db)
+            return await _search_memories_vector(query_embedding, limit, threshold, owner_id, db)
+    return await _search_memories_vector(query_embedding, limit, threshold, owner_id, db)
 
 
 async def _search_memories_vector(
     query_embedding: list[float],
     limit: int,
     threshold: float,
+    owner_id: uuid.UUID | None,
     db: AsyncSession,
 ) -> list[dict]:
     """Internal vector search implementation."""
@@ -45,9 +48,14 @@ async def _search_memories_vector(
         select(Memory, embedding_expr.label("similarity"))
         .where(Memory.embedding.isnot(None))
         .where(embedding_expr >= threshold)
-        .order_by(embedding_expr.desc())
-        .limit(limit)
     )
+
+    # Security: scope to owner if provided (IDOR fix — without this, any user
+    # could search across ALL users' memories via vector similarity)
+    if owner_id:
+        stmt = stmt.where(Memory.owner_id == owner_id)
+
+    stmt = stmt.order_by(embedding_expr.desc()).limit(limit)
 
     result = await db.execute(stmt)
     rows = result.all()

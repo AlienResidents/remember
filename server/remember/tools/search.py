@@ -1,5 +1,6 @@
 """Search memories tool."""
 
+import re
 import uuid
 
 from sqlalchemy import select, func
@@ -7,6 +8,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from remember.models import Memory, Tag, MemoryTag
+
+
+# PostgreSQL to_tsquery operators — if these appear in user input, to_tsquery
+# raises a syntax error (unhandled → 500). Strip them before constructing the
+# tsquery. We split on whitespace and join with " | " (OR), so the only
+# operators we want are the ones WE add, never from user input.
+_TSQUERY_OPERATOR_RE = re.compile(r'[!&|():*"\\]')
+
+
+def _sanitize_tsquery(query: str) -> str:
+    """Sanitize user input for safe use in PostgreSQL to_tsquery.
+
+    Strips all tsquery operators (!, &, |, (, ), :, *, double-quote, backslash) from each word so user
+    input can never produce a tsquery syntax error. Returns a tsquery string
+    of the form "word1 | word2 | word3*" (OR of words, prefix match on last).
+    """
+    words = [_TSQUERY_OPERATOR_RE.sub("", w) for w in query.split()]
+    words = [w for w in words if w]  # drop empty words (e.g. input was all operators)
+    if not words:
+        return ""
+    # OR the words together; append * for prefix matching on the last word only
+    return " | ".join(words) + "*"
 
 
 async def search_memories(
@@ -46,8 +69,13 @@ async def _search_memories(
     db: AsyncSession,
 ) -> list[dict]:
     """Internal search implementation."""
-    # Build full-text search query
-    search_term = f"{' | '.join(query.split())}*"
+    # Sanitize user input before constructing the tsquery — PostgreSQL's
+    # to_tsquery raises a syntax error on operator chars (! & | ( ) : *).
+    search_term = _sanitize_tsquery(query)
+    if not search_term:
+        # Query was empty after stripping operators — return no results
+        # rather than passing an empty tsquery (which also errors).
+        return []
     search_expr = func.to_tsvector("english", func.concat(Memory.name, " ", Memory.description, " ", Memory.body)).op("@@")(
         func.to_tsquery(search_term)
     )

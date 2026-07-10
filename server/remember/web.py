@@ -275,15 +275,22 @@ async def _get_or_create_user(user_info: dict) -> uuid.UUID:
 
     Raises ValueError if userinfo is incomplete — caller must handle
     (the /auth/callback endpoint returns 502 in this case).
+
+    L3: Handles the concurrent get-or-create race condition via the unique
+    constraint on (provider, provider_id). Two simultaneous first-login
+    requests for the same Keycloak user would both find no existing row and
+    both try to INSERT; the loser raises IntegrityError, which we catch,
+    roll back, and re-fetch the existing row.
     """
+    from sqlalchemy import select
+    from sqlalchemy.exc import IntegrityError
+
     if not user_info or "sub" not in user_info:
         raise ValueError("Incomplete Keycloak userinfo: missing 'sub' claim")
 
     provider_id = str(user_info["sub"])
 
     async with async_session_factory() as db:
-        from sqlalchemy import select
-
         stmt = select(User).where(
             User.provider == "keycloak",
             User.provider_id == provider_id,
@@ -302,7 +309,15 @@ async def _get_or_create_user(user_info: dict) -> uuid.UUID:
             email=user_info.get("email"),
         )
         db.add(user)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            # Race condition — another concurrent login created this user.
+            # Roll back and re-fetch the existing row.
+            await db.rollback()
+            result = await db.execute(stmt)
+            user = result.scalar_one()
+            return user.id
         return user.id
 
 
@@ -325,11 +340,13 @@ async def api_search(
     limit: int = 50,
 ):
     """Search memories via HTTP API."""
+    # L8: Cap limit to prevent DoS via unbounded queries (matches MCP wrapper cap)
+    capped_limit = min(limit, 100)
     async with async_session_factory() as db:
         results = await search_memories(
             query=query,
             types=[type] if type else None,
-            limit=limit,
+            limit=capped_limit,
             owner_id=user_id,
             db=db,
         )
