@@ -3,18 +3,21 @@
  *
  * Connects to the REMEMBER MCP server and registers its tools in pi.
  *
- * Auth: reads OAuth client_credentials from ~/.pi/agent/auth.json
- * under the "remember-mcp" key. The extension manages token fetching
- * and caching itself — it does NOT rely on pi's built-in MCP server
- * configuration in settings.json.
+ * Auth: OAuth 2.0 authorization_code + PKCE (RFC 8252 / RFC 7636).
+ *   - Public client (no secret — desktop apps can't keep secrets)
+ *   - PKCE S256 is the security mechanism
+ *   - Local callback server on http://127.0.0.1:8484/callback
+ *   - Browser launch with headless fallback
+ *   - Tokens (access + refresh) cached in ~/.pi/agent/auth.json
+ *   - Automatic refresh on expiry; re-authorize if refresh fails
  *
  * The server runs in stateless_http mode — each tools/call is standalone,
  * no initialize handshake or session tracking needed.
  *
  * Identity resolution:
- *   The server derives user identity exclusively from the JWT azp claim
- *   (via its client_user_mapping config). The extension does NOT inject
- *   identity params — the server does not trust client-supplied identity.
+ *   The server reads the JWT `sub` claim (Keycloak user UUID) directly.
+ *   The extension does NOT inject identity params — the server does not
+ *   trust client-supplied identity. No client_user_mapping needed.
  *
  * Tools registered:
  *   remember__search_memories

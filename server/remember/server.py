@@ -189,17 +189,17 @@ async def refute_memory(memory_id: str, reason: str, ctx: Context | None = None)
 # ---------------------------------------------------------------------------
 # User identity resolution
 # ---------------------------------------------------------------------------
-# H1 fix: identity is derived EXCLUSIVELY from the JWT (via ctx).
-# Client-supplied owner_id/user_id params are no longer accepted —
-# the server does not trust the client for authorization decisions.
+# Identity is derived EXCLUSIVELY from the JWT `sub` claim (OIDC subject).
+# The `sub` is the user's immutable Keycloak UUID — it never changes per
+# user per issuer, even if username/email changes (OIDC spec).
 #
-# The middleware extracts azp from the JWT, looks up client_user_mapping,
-# and stashes auth_provider_id on request.state. This function reads that
-# and resolves it to a UUID via get-or-create on the User table.
+# The middleware extracts `sub` from the validated JWT and stashes it on
+# request.state.auth_provider_id. This function reads that and resolves
+# it to a UUID via get-or-create on the User table.
 #
-# The mapping value MUST be the Keycloak user's `sub` claim (the immutable
-# OIDC subject identifier), NOT a username. The web UI also uses `sub` as
-# provider_id, so both paths converge on the same User row.
+# Both MCP (authorization_code + PKCE) and web UI paths use `sub` as
+# provider_id, so they converge on the same User row automatically —
+# no client_user_mapping needed.
 
 
 async def get_or_create_user_by_provider_id(provider_id: str) -> uuid_module.UUID:
@@ -227,11 +227,11 @@ async def get_or_create_user_by_provider_id(provider_id: str) -> uuid_module.UUI
 
 
 async def resolve_user_id(ctx: Context | None = None) -> uuid_module.UUID:
-    """Resolve the authenticated user's UUID from the JWT via ctx.
+    """Resolve the authenticated user's UUID from the JWT `sub` claim via ctx.
 
-    H1 fix: identity comes exclusively from the JWT azp claim (set by
-    the middleware via client_user_mapping). Client-supplied identity
-    strings are NOT accepted — the server does not trust the client.
+    Identity comes exclusively from the JWT `sub` (OIDC subject identifier),
+    set by the middleware. Client-supplied identity strings are NOT accepted —
+    the server does not trust the client.
     """
     if ctx is not None:
         try:
@@ -243,9 +243,7 @@ async def resolve_user_id(ctx: Context | None = None) -> uuid_module.UUID:
             if provider_id:
                 return await get_or_create_user_by_provider_id(provider_id)
 
-    raise ValueError(
-        "No user identity in JWT — configure REMEMBER_AUTH__CLIENT_USER_MAPPING"
-    )
+    raise ValueError("No user identity in JWT — bearer token missing or invalid")
 
 
 # Expose the ASGI app for uvicorn (module:app pattern).
@@ -306,9 +304,9 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 
         # Stash the provider_id (Keycloak `sub`) on request state.
         # Tools can read this via ctx.request_context.request.state.auth_provider_id
-        # The mapping value MUST be the Keycloak user's `sub`, not a username.
-        azp = payload.get("azp", "")
-        request.state.auth_provider_id = settings.auth.client_user_mapping.get(azp, "")
+        # The `sub` is the user's immutable Keycloak UUID — used directly as
+        # provider_id, so both MCP and web UI paths converge on the same User row.
+        request.state.auth_provider_id = payload.get("sub", "")
 
         return await call_next(request)
 
