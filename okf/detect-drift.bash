@@ -378,6 +378,11 @@ print_summary() {
       echo "  - ${f}"
     done
     echo
+    echo "To generate missing concepts, run:"
+    echo "  bash okf/generate-concepts.bash"
+    echo "Then re-run this check:"
+    echo "  bash okf/detect-drift.bash"
+    echo
   fi
 }
 
