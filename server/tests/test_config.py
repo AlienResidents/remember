@@ -4,79 +4,78 @@ import os
 from pathlib import Path
 
 import pytest
-import yaml
 
 from remember.config import Settings
 
 
-def test_settings_defaults():
-    """Test settings with default values."""
+def test_settings_defaults(monkeypatch):
+    """Test settings with default values (clear env overrides from conftest)."""
+    monkeypatch.delenv("REMEMBER_AUTH__DEV_MODE", raising=False)
     settings = Settings()
-    assert settings.database_url == "sqlite+aiosqlite:///db.sqlite3"
-    assert settings.jwt_secret == "change-me-in-production"
-    assert settings.api_key is None
-    assert settings.dev_mode is True
+    assert settings.database.url == "postgresql+asyncpg://localhost:5432/remember"
+    assert settings.auth.dev_mode is False
+    assert settings.server.host == "0.0.0.0"
+    assert settings.server.port == 8000
 
 
 def test_settings_from_env(monkeypatch):
-    """Test settings from environment variables."""
-    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:pass@localhost/db")
-    monkeypatch.setenv("JWT_SECRET", "test-secret")
-    monkeypatch.setenv("DEV_MODE", "false")
+    """Test settings from environment variables (nested via __ delimiter)."""
+    monkeypatch.delenv("REMEMBER_AUTH__DEV_MODE", raising=False)
+    monkeypatch.setenv("REMEMBER_DATABASE__URL", "postgresql+asyncpg://user:pass@localhost/db")
+    monkeypatch.setenv("REMEMBER_AUTH__DEV_MODE", "true")
+    monkeypatch.setenv("REMEMBER_SERVER__PORT", "9000")
 
     settings = Settings()
-    assert settings.database_url == "postgresql+asyncpg://user:pass@localhost/db"
-    assert settings.jwt_secret == "test-secret"
-    assert settings.dev_mode is False
-
-
-def test_settings_from_yaml():
-    """Test settings from YAML config file."""
-    config_dir = Path(__file__).parent.parent / "test_config"
-    config_dir.mkdir(exist_ok=True)
-    config_file = config_dir / "config.yaml"
-    config_file.write_text(yaml.dump({
-        "database_url": "postgresql+asyncpg://test:test@localhost/test",
-        "jwt_secret": "yaml-secret",
-        "dev_mode": False,
-    }))
-
-    os.environ["CONFIG_FILE"] = str(config_file)
-    settings = Settings()
-    assert settings.database_url == "postgresql+asyncpg://test:test@localhost/test"
-    assert settings.jwt_secret == "yaml-secret"
-    assert settings.dev_mode is False
-
-    # Cleanup
-    config_file.unlink()
-    config_dir.rmdir()
-
-
-def test_settings_validation():
-    """Test settings validation."""
-    from pydantic import ValidationError
-
-    # JWT secret too short
-    with pytest.raises(ValidationError):
-        Settings(jwt_secret="ab")
-
-
-def test_settings_auth_config():
-    """Test auth configuration parsing."""
-    settings = Settings()
-    auth_config = settings.get_auth_config()
-
-    # Should have dev mode enabled by default
-    assert "dev" in auth_config
-    assert auth_config["dev"]["enabled"] is True
+    assert settings.database.url == "postgresql+asyncpg://user:pass@localhost/db"
+    assert settings.auth.dev_mode is True
+    assert settings.server.port == 9000
 
 
 def test_settings_database_url():
     """Test database URL handling."""
-    # SQLite (default)
+    # Default
     settings = Settings()
-    assert "sqlite" in settings.database_url
+    assert "postgresql" in settings.database.url
 
-    # PostgreSQL
-    settings = Settings(database_url="postgresql+asyncpg://localhost/test")
-    assert "postgresql" in settings.database_url
+    # Override via nested field
+    settings = Settings()
+    settings.database.url = "sqlite+aiosqlite:///test.sqlite3"
+    assert "sqlite" in settings.database.url
+
+
+def test_settings_auth_config(monkeypatch):
+    """Test auth configuration."""
+    monkeypatch.delenv("REMEMBER_AUTH__DEV_MODE", raising=False)
+    settings = Settings()
+    assert settings.auth.dev_mode is False
+    assert settings.auth.keycloak_authority == ""
+    assert settings.auth.keycloak_enabled is False
+
+
+def test_settings_keycloak_enabled(monkeypatch):
+    """Test keycloak_enabled property."""
+    monkeypatch.delenv("REMEMBER_AUTH__DEV_MODE", raising=False)
+
+    settings = Settings()
+    # Not enabled by default (no authority)
+    assert settings.auth.keycloak_enabled is False
+
+    # Enabled when authority is set and dev_mode is False
+    settings.auth.keycloak_authority = "https://keycloak.example.com"
+    assert settings.auth.keycloak_enabled is True
+
+    # Disabled when dev_mode is True
+    settings.auth.dev_mode = True
+    assert settings.auth.keycloak_enabled is False
+
+
+def test_settings_keycloak_urls():
+    """Test Keycloak URL construction."""
+    settings = Settings()
+    settings.auth.keycloak_authority = "https://kc.example.com"
+    settings.auth.keycloak_realm = "myrealm"
+
+    assert settings.auth.keycloak_jwks_url == (
+        "https://kc.example.com/realms/myrealm/protocol/openid-connect/certs"
+    )
+    assert settings.auth.keycloak_issuer == "https://kc.example.com/realms/myrealm"

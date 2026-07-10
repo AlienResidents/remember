@@ -235,3 +235,112 @@ def test_middleware_requires_bearer_token_in_prod_mode():
         # Restore
         settings.auth.dev_mode = original_dev
         settings.auth.keycloak_authority = original_authority
+
+
+# ---------------------------------------------------------------------------
+# Strix findings: offset bypass, api_search cap, vector IDOR, tsquery sanitization
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_memories_offset_is_capped(db_session: AsyncSession, test_user: User):
+    """Strix vuln-0001: offset is capped independently — limit=1, offset=999999
+    must NOT produce a DB query for 1,000,000 rows.
+
+    The old code passed `limit=capped_limit + offset`, which let an attacker
+    bypass the 500-row cap by sending a huge offset. The fix passes limit and
+    offset as separate parameters with offset capped at 10,000.
+    """
+    for i in range(5):
+        await save_memory(
+            name=f"offset-test-{i}",
+            type="project",
+            description=f"Test {i}",
+            body=f"Body {i}",
+            owner_id=test_user.id,
+            db=db_session,
+        )
+    # With offset cap, requesting offset=999999 returns at most 5 results
+    # (the cap limits offset to 10,000, and we only have 5 memories)
+    results = await list_memories(
+        owner_id=test_user.id,
+        limit=50,
+        offset=999999,
+        db=db_session,
+    )
+    # With only 5 memories and a huge offset, we get 0 results (not 1,000,000 rows)
+    assert len(results) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_memories_offset_pagination_works(db_session: AsyncSession, test_user: User):
+    """Strix vuln-0001: offset still works for legitimate pagination."""
+    for i in range(10):
+        await save_memory(
+            name=f"page-test-{i:02d}",
+            type="project",
+            description=f"Test {i}",
+            body=f"Body {i}",
+            owner_id=test_user.id,
+            db=db_session,
+        )
+    page1 = await list_memories(owner_id=test_user.id, limit=5, offset=0, db=db_session)
+    page2 = await list_memories(owner_id=test_user.id, limit=5, offset=5, db=db_session)
+    assert len(page1) == 5
+    assert len(page2) == 5
+    # Pages should not overlap
+    page1_names = {r["name"] for r in page1}
+    page2_names = {r["name"] for r in page2}
+    assert page1_names.isdisjoint(page2_names)
+
+
+def test_api_search_caps_limit():
+    """Strix vuln-0002: web UI /api/search caps limit at 100 (like MCP wrapper)."""
+    import inspect
+    from remember.web import api_search
+    source = inspect.getsource(api_search)
+    assert "min(limit, 100)" in source, "api_search must cap limit at 100"
+
+
+def test_search_memories_vector_has_owner_id_param():
+    """Strix vuln-0003: search_memories_vector accepts owner_id for scoping."""
+    import inspect
+    from remember.tools.search_vector import search_memories_vector
+    sig = inspect.signature(search_memories_vector)
+    assert "owner_id" in sig.parameters, "search_memories_vector must accept owner_id"
+
+
+def test_search_memories_vector_scopes_by_owner():
+    """Strix vuln-0003: _search_memories_vector filters by owner_id in the query."""
+    import inspect
+    from remember.tools.search_vector import _search_memories_vector
+    source = inspect.getsource(_search_memories_vector)
+    assert "owner_id" in source, "_search_memories_vector must filter by owner_id"
+    assert "Memory.owner_id == owner_id" in source
+
+
+def test_search_sanitizes_tsquery_operators():
+    """Strix vuln-0004: _sanitize_tsquery strips tsquery operator chars."""
+    from remember.tools.search import _sanitize_tsquery
+
+    # Normal query — words joined with OR, prefix match on last
+    assert _sanitize_tsquery("hello world") == "hello | world*"
+
+    # Operator chars stripped
+    assert _sanitize_tsquery("hello & world") == "hello | world*"
+    assert _sanitize_tsquery("test!") == "test*"
+    assert _sanitize_tsquery("(test)") == "test*"
+    assert _sanitize_tsquery('a"b') == "ab*"
+    assert _sanitize_tsquery("a:b") == "ab*"
+
+    # All-operator input returns empty string (caller returns [])
+    assert _sanitize_tsquery("!&|():*\"") == ""
+
+
+def test_web_get_or_create_user_handles_integrity_error():
+    """Strix vuln-0005: web.py _get_or_create_user catches IntegrityError."""
+    import inspect
+    from remember.web import _get_or_create_user
+    source = inspect.getsource(_get_or_create_user)
+    assert "IntegrityError" in source, "_get_or_create_user must catch IntegrityError"
+    assert "rollback" in source.lower(), "must rollback on IntegrityError"

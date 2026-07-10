@@ -46,57 +46,61 @@ async def test_static_js():
 
 
 @pytest.mark.asyncio
-async def test_api_search_no_db():
-    """Test search endpoint without DB connection."""
+async def test_api_search_no_auth():
+    """Test search endpoint without auth returns 401."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/api/search?q=test")
-        # Should fail without DB, but not crash
-        assert response.status_code in [200, 500]
+        assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_api_get_no_db():
-    """Test get endpoint without DB connection."""
+async def test_api_get_no_auth():
+    """Test get endpoint without auth returns 401."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.get("/api/get/test-id")
-        # Should fail without DB, but not crash
-        assert response.status_code in [200, 404, 500]
+        assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_api_save_no_db():
-    """Test save endpoint without DB connection."""
+async def test_api_save_no_auth():
+    """Test save endpoint without auth returns 401."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/save",
             json={"name": "test", "type": "test", "description": "test", "body": "test"},
         )
-        # Should fail without DB, but not crash
-        assert response.status_code in [200, 400, 500]
+        assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_api_verify_no_db():
-    """Test verify endpoint without DB connection."""
+async def test_api_verify_no_auth():
+    """Test verify endpoint without auth returns 401."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/verify/test-id")
-        # Should fail without DB, but not crash
-        assert response.status_code in [200, 500]
+        assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_api_archive_no_db():
-    """Test archive endpoint without DB connection."""
+async def test_api_archive_no_auth():
+    """Test archive endpoint without auth returns 401."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/archive/test-id")
-        # Should fail without DB, but not crash
-        assert response.status_code in [200, 500]
+        assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_api_refute_no_db():
-    """Test refute endpoint without DB connection."""
+async def test_api_refute_no_auth():
+    """Test refute endpoint without auth returns 401."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post("/api/refute/test-id", json={"reason": "test"})
-        # Should fail without DB, but not crash
-        assert response.status_code in [200, 500]
+        assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_auth_status_unauthenticated():
+    """Test auth status endpoint returns unauthenticated without session."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.get("/auth/status")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["authenticated"] is False

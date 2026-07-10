@@ -13,7 +13,7 @@ from remember.models import User, Memory, Tag, MemoryTag, Confirmation, MemoryHi
 async def test_create_user(db_session: AsyncSession, test_user: User):
     """Test creating a user."""
     assert test_user.id is not None
-    assert test_user.provider == "github"
+    assert test_user.provider == "keycloak"
     assert test_user.provider_id == "testuser"
     assert test_user.display_name == "Test User"
     assert test_user.email == "test@example.com"
@@ -136,8 +136,9 @@ async def test_memory_tag_relationship(db_session: AsyncSession, test_user: User
     db_session.add(memory_tag)
     await db_session.commit()
 
-    # Refresh memory to load tags
-    await db_session.refresh(test_memory)
+    # Refresh memory to load tags — must specify attribute_names for async
+    # (lazy loading in async context raises MissingGreenlet without it)
+    await db_session.refresh(test_memory, attribute_names=["tags"])
     assert len(test_memory.tags) == 1
     assert test_memory.tags[0].name == "related-tag"
 
@@ -170,6 +171,7 @@ async def test_memory_history(db_session: AsyncSession, test_user: User, test_me
     from datetime import datetime, timezone
 
     history = MemoryHistory(
+        id=uuid.uuid4(),
         memory_id=test_memory.id,
         body="# Updated body",
         description="Updated description",

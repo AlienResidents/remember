@@ -14,7 +14,7 @@ from remember.auth.base import AuthResult
 
 
 @pytest.mark.asyncio
-async def test_tailscale_auth_provides_user(db_session: AsyncSession):
+async def test_tailscale_auth_provides_user(db_session: AsyncSession, patch_db):
     """Test tailscale auth provides a user."""
     config = TailscaleAuthConfig(enabled=True, tailnet="test.ts.net")
     provider = TailscaleAuthProvider(config)
@@ -28,7 +28,7 @@ async def test_tailscale_auth_provides_user(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_tailscale_auth_idempotent(db_session: AsyncSession):
+async def test_tailscale_auth_idempotent(db_session: AsyncSession, patch_db):
     """Test tailscale auth is idempotent."""
     config = TailscaleAuthConfig(enabled=True, tailnet="test.ts.net")
     provider = TailscaleAuthProvider(config)

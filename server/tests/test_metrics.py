@@ -2,6 +2,8 @@
 
 import pytest
 
+pytest.importorskip("prometheus_client")
+
 from remember.metrics import (
     record_request,
     record_tool_call,

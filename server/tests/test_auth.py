@@ -13,7 +13,7 @@ from remember.auth.base import AuthResult
 
 
 @pytest.mark.asyncio
-async def test_dev_auth_provides_user(db_session: AsyncSession):
+async def test_dev_auth_provides_user(db_session: AsyncSession, patch_db):
     """Test dev auth provides a user."""
     config = DevAuthConfig(enabled=True)
     provider = DevAuthProvider(config)
@@ -27,7 +27,7 @@ async def test_dev_auth_provides_user(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_dev_auth_idempotent(db_session: AsyncSession):
+async def test_dev_auth_idempotent(db_session: AsyncSession, patch_db):
     """Test dev auth is idempotent (same user on multiple calls)."""
     config = DevAuthConfig(enabled=True)
     provider = DevAuthProvider(config)
@@ -39,7 +39,7 @@ async def test_dev_auth_idempotent(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_dev_auth_with_forced_user_id(db_session: AsyncSession):
+async def test_dev_auth_with_forced_user_id(db_session: AsyncSession, patch_db):
     """Test dev auth with forced user ID."""
     forced_id = str(uuid.uuid4())
     config = DevAuthConfig(enabled=True, default_user_id=forced_id)
@@ -61,15 +61,16 @@ async def test_api_key_auth_invalid_key(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_api_key_auth_valid_key(db_session: AsyncSession):
+async def test_api_key_auth_valid_key(db_session: AsyncSession, patch_db):
     """Test API key auth with valid key."""
     from remember.models import User
     from remember.auth.api_key import APIKeyAuthProvider
 
-    # Create a user with API key
-    import hashlib
+    # Create a user with API key — must use bcrypt hash (not SHA256)
+    # because APIKeyAuthProvider.authenticate() uses bcrypt.checkpw
     test_key = "test-api-key-123"
-    key_hash = hashlib.sha256(test_key.encode()).hexdigest()
+    provider = APIKeyAuthProvider(APIKeyConfig(enabled=True))
+    key_hash = provider.hash_api_key(test_key)
 
     user = User(
         id=uuid.uuid4(),
