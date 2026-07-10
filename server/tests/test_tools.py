@@ -130,6 +130,34 @@ async def test_search_memories(db_session: AsyncSession, test_user: User, test_m
 
 
 @pytest.mark.asyncio
+async def test_search_memories_all_operators_returns_empty(
+    db_session: AsyncSession, test_user: User, test_memory: Memory
+):
+    """All-operator query sanitizes to empty string and returns [] early.
+
+    This tests the Strix vuln-0004 fix path on SQLite — the sanitization layer
+    runs before the PostgreSQL-only to_tsvector call, so it works on any DB.
+    """
+    result = await search_memories(
+        query="!&|():*\"\\",
+        db=db_session,
+    )
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_search_memories_empty_query_returns_empty(
+    db_session: AsyncSession, test_user: User, test_memory: Memory
+):
+    """Empty query returns [] without hitting PostgreSQL."""
+    result = await search_memories(
+        query="",
+        db=db_session,
+    )
+    assert result == []
+
+
+@pytest.mark.asyncio
 async def test_verify_memory(db_session: AsyncSession, test_user: User, test_memory: Memory):
     """Test verifying a memory."""
     result = await verify_memory(
