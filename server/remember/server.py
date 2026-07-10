@@ -306,7 +306,13 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         # Tools can read this via ctx.request_context.request.state.auth_provider_id
         # The `sub` is the user's immutable Keycloak UUID — used directly as
         # provider_id, so both MCP and web UI paths converge on the same User row.
-        request.state.auth_provider_id = payload.get("sub", "")
+        sub = payload.get("sub", "")
+        if not sub:
+            return JSONResponse(
+                {"error": "Token missing sub claim"},
+                status_code=401,
+            )
+        request.state.auth_provider_id = sub
 
         return await call_next(request)
 

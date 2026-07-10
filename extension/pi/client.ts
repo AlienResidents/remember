@@ -21,7 +21,7 @@
  * reads it directly — no client_user_mapping needed.
  */
 
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, chmodSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
@@ -92,7 +92,10 @@ function readAuthFile(): Record<string, unknown> {
 }
 
 function writeAuthFile(data: Record<string, unknown>): void {
-  writeFileSync(getAuthPath(), JSON.stringify(data, null, 2) + "\n");
+  const authPath = getAuthPath();
+  writeFileSync(authPath, JSON.stringify(data, null, 2) + "\n", { mode: 0o600 });
+  // Ensure 0600 even if the file already existed (mode only applies on creation)
+  chmodSync(authPath, 0o600);
 }
 
 function readOAuthConfig(): OAuthConfig {
