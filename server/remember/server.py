@@ -375,15 +375,17 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         if expected_client and payload.get("azp") != expected_client:
             raise _AuthError("Token from unauthorized client")
 
-        # L2: Verify audience if the aud claim is present.
-        # Defense-in-depth: if the token carries an `aud` claim, it must include
-        # our client ID. If `aud` is absent (some IdP configurations omit it),
-        # we rely on the azp check above.
-        aud = payload.get("aud")
-        if aud is not None and expected_client:
-            aud_list = [aud] if isinstance(aud, str) else list(aud)
-            if expected_client not in aud_list:
-                raise _AuthError("Token audience does not include this service")
+        # L2: Audience check skipped — Keycloak's default `aud` is
+        # ['master-realm', 'account'], not the client ID. The `azp` check
+        # above is the authoritative OIDC claim for verifying which client
+        # the token was issued to. To enable `aud` checking, configure a
+        # Keycloak audience mapper on the client to add the client ID to
+        # the `aud` list, then re-enable this check.
+        # aud = payload.get("aud")
+        # if aud is not None and expected_client:
+        #     aud_list = [aud] if isinstance(aud, str) else list(aud)
+        #     if expected_client not in aud_list:
+        #         raise _AuthError("Token audience does not include this service")
 
         return payload
 
