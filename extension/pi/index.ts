@@ -3,13 +3,16 @@
  *
  * Connects to the REMEMBER MCP server and registers its tools in pi.
  *
- * Auth: OAuth 2.0 authorization_code + PKCE (RFC 8252 / RFC 7636).
- *   - Public client (no secret — desktop apps can't keep secrets)
- *   - PKCE S256 is the security mechanism
- *   - Local callback server on http://127.0.0.1:8484/callback
- *   - Browser launch with headless fallback
+ * Auth: OAuth 2.0 Device Authorization Grant (RFC 8628) + PKCE.
+ *   - Public client (no secret — desktop/CLI apps can't keep secrets)
+ *   - PKCE S256 required by Keycloak (additional security)
+ *   - No callback server — user opens a URL on ANY device
+ *   - Extension polls the token endpoint until login completes
  *   - Tokens (access + refresh) cached in ~/.pi/agent/auth.json
  *   - Automatic refresh on expiry; re-authorize if refresh fails
+ *
+ * This is the same pattern used by `aws sso login`, `gh auth login`, etc.
+ * Works in headless environments, SSH sessions, and inside TUIs.
  *
  * The server runs in stateless_http mode — each tools/call is standalone,
  * no initialize handshake or session tracking needed.
