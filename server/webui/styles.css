@@ -386,6 +386,7 @@ body {
 .results-list {
     max-height: 500px;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .result-item {
@@ -404,7 +405,6 @@ body {
 .result-item:hover {
     border-color: var(--neon-cyan);
     background: var(--bg-card-hover);
-    transform: translateX(5px);
     box-shadow: var(--shadow-cyan);
 }
 
