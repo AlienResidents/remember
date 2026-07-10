@@ -52,6 +52,10 @@ async def _get_memory(
     if not memory:
         return None
 
+    # Security: only the owner can read full memory details
+    if memory.owner_id != user_id:
+        return None
+
     # Log access
     access_log = AccessLog(
         memory_id=memory_id,

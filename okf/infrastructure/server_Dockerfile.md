@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "# REMEMBER Server - Docker Dockerfile"
 resource: server/Dockerfile
-timestamp: 2026-07-09T14:09:53Z
+timestamp: 2026-07-10T02:44:33Z
 ---
 
 # Dockerfile
@@ -41,7 +41,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user
-RUN groupadd -r remember && useradd -r -g remember remember
+RUN groupadd -r -g 1000 remember && useradd -r -u 1000 -g 1000 remember
 
 WORKDIR /app
 

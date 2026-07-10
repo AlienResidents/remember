@@ -2,6 +2,8 @@
 
 const API_BASE = window.location.origin + '/api';
 
+import { escapeHtml, renderMarkdown } from './utils.js';
+
 // State
 let memories = [];
 let currentMemory = null;
@@ -117,18 +119,23 @@ function displayResults(results) {
     }
     
     container.innerHTML = results.map(mem => `
-        <div class="result-item" onclick="showDetail('${mem.id}')">
+        <div class="result-item" data-memory-id="${escapeHtml(mem.id)}">
             <div class="result-content">
                 <div class="result-name">${escapeHtml(mem.name)}</div>
                 <div class="result-desc">${escapeHtml(mem.description)}</div>
                 <div class="result-meta">
-                    <span class="tag">${mem.type}</span>
-                    <span class="status-badge status-${mem.status}">${mem.status}</span>
+                    <span class="tag">${escapeHtml(mem.type)}</span>
+                    <span class="status-badge status-${escapeHtml(mem.status)}">${escapeHtml(mem.status)}</span>
                     ${(mem.tags || []).map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
                 </div>
             </div>
         </div>
     `).join('');
+
+    // Attach click listeners (module scope — inline onclick won't work)
+    container.querySelectorAll('.result-item').forEach(item => {
+        item.addEventListener('click', () => showDetail(item.dataset.memoryId));
+    });
 }
 
 // Detail view
@@ -153,15 +160,15 @@ async function showDetail(memoryId) {
             <div class="detail-meta">
                 <div class="detail-meta-item">
                     <span class="detail-meta-label">Type</span>
-                    <span class="detail-meta-value">${memory.type}</span>
+                    <span class="detail-meta-value">${escapeHtml(memory.type)}</span>
                 </div>
                 <div class="detail-meta-item">
                     <span class="detail-meta-label">Status</span>
-                    <span class="detail-meta-value"><span class="status-badge status-${memory.status}">${memory.status}</span></span>
+                    <span class="detail-meta-value"><span class="status-badge status-${escapeHtml(memory.status)}">${escapeHtml(memory.status)}</span></span>
                 </div>
                 <div class="detail-meta-item">
                     <span class="detail-meta-label">Owner</span>
-                    <span class="detail-meta-value">${memory.owner_id}</span>
+                    <span class="detail-meta-value">${escapeHtml(memory.owner_id)}</span>
                 </div>
                 <div class="detail-meta-item">
                     <span class="detail-meta-label">Created</span>
@@ -276,24 +283,7 @@ function initThemeToggle() {
     });
 }
 
-// Utilities
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function renderMarkdown(text) {
-    // Simple markdown renderer
-    return text
-        .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-        .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-        .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>');
-}
+// Utilities (escapeHtml, renderMarkdown) imported from utils.js
 
 function showToast(message, type = 'info') {
     const container = document.getElementById('toast-container');

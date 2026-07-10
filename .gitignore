@@ -18,6 +18,10 @@ build/
 .vscode/
 .idea/
 *.swp
+
+# Local dev artifacts
+server/README.md
+server/.venv/
 *.swo
 *~
 

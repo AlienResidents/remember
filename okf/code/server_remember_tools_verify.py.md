@@ -2,7 +2,7 @@
 type: Source Code
 description: "Verify memory tool."
 resource: server/remember/tools/verify.py
-timestamp: 2026-07-09T14:09:54Z
+timestamp: 2026-07-10T02:44:34Z
 ---
 
 # verify

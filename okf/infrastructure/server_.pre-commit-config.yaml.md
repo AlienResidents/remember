@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "repos:"
 resource: server/.pre-commit-config.yaml
-timestamp: 2026-07-09T14:09:53Z
+timestamp: 2026-07-10T02:44:33Z
 ---
 
 # .pre-commit-config

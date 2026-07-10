@@ -2,7 +2,7 @@
 type: Source Code
 description: "Vector search tool using pgvector."
 resource: server/remember/tools/search_vector.py
-timestamp: 2026-07-09T14:09:54Z
+timestamp: 2026-07-10T02:44:34Z
 ---
 
 # search vector

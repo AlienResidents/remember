@@ -2,7 +2,7 @@
 type: Source Code
 description: "Tests for CLI tool."
 resource: server/tests/test_cli.py
-timestamp: 2026-07-09T14:09:54Z
+timestamp: 2026-07-10T02:44:34Z
 ---
 
 # test cli

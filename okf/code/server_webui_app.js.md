@@ -2,7 +2,7 @@
 type: Source Code
 description: "// REMEMBER Web UI — Main Application"
 resource: server/webui/app.js
-timestamp: 2026-07-09T14:09:54Z
+timestamp: 2026-07-10T02:44:34Z
 ---
 
 # app
@@ -15,6 +15,8 @@ Source path: `server/webui/app.js`
 // REMEMBER Web UI — Main Application
 
 const API_BASE = window.location.origin + '/api';
+
+import { escapeHtml, renderMarkdown } from './utils.js';
 
 // State
 let memories = [];
@@ -50,8 +52,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initParticles();
     initSearch();
-    initCreateForm();
-    initThemeToggle();
 ```
 
 *…truncated — full source at `server/webui/app.js`*

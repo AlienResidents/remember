@@ -1,5 +1,7 @@
 """Search memories tool."""
 
+import uuid
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -12,6 +14,7 @@ async def search_memories(
     types: list[str] | None = None,
     tags: list[str] | None = None,
     limit: int = 10,
+    owner_id: uuid.UUID | None = None,
     db: AsyncSession | None = None,
 ) -> list[dict]:
     """Search memories by full-text search.
@@ -21,6 +24,7 @@ async def search_memories(
         types: Filter by memory types (project, reference)
         tags: Filter by tags
         limit: Maximum results
+        owner_id: Filter by owner (security: scope to authenticated user)
         db: Database session
 
     Returns:
@@ -29,8 +33,8 @@ async def search_memories(
     if db is None:
         from remember.db import async_session_factory
         async with async_session_factory() as db:
-            return await _search_memories(query, types, tags, limit, db)
-    return await _search_memories(query, types, tags, limit, db)
+            return await _search_memories(query, types, tags, limit, owner_id, db)
+    return await _search_memories(query, types, tags, limit, owner_id, db)
 
 
 async def _search_memories(
@@ -38,6 +42,7 @@ async def _search_memories(
     types: list[str] | None,
     tags: list[str] | None,
     limit: int,
+    owner_id: uuid.UUID | None,
     db: AsyncSession,
 ) -> list[dict]:
     """Internal search implementation."""
@@ -54,6 +59,10 @@ async def _search_memories(
         .where(search_expr)
         .options(joinedload(Memory.tags))
     )
+
+    # Security: scope to owner if provided
+    if owner_id:
+        stmt = stmt.where(Memory.owner_id == owner_id)
 
     # Apply filters
     if types:

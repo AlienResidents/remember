@@ -2,7 +2,7 @@
 type: Source Code
 description: "Tests for extended authentication providers."
 resource: server/tests/test_auth_extended.py
-timestamp: 2026-07-09T14:09:54Z
+timestamp: 2026-07-10T02:44:34Z
 ---
 
 # test auth extended

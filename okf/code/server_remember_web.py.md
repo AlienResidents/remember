@@ -2,7 +2,7 @@
 type: Source Code
 description: "Web UI server for REMEMBER."
 resource: server/remember/web.py
-timestamp: 2026-07-09T14:09:54Z
+timestamp: 2026-07-10T02:44:34Z
 ---
 
 # web
@@ -28,6 +28,7 @@ Access tokens are stored in the session and used for DB operations.
 
 import json
 import os
+import secrets
 import uuid
 from pathlib import Path
 from urllib.parse import urlencode
@@ -51,7 +52,6 @@ from remember.tools import (
     verify_memory,
     archive_memory,
     refute_memory,
-)
 ```
 
 *…truncated — full source at `server/remember/web.py`*

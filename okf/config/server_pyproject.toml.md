@@ -2,7 +2,7 @@
 type: Configuration
 description: "[build-system]"
 resource: server/pyproject.toml
-timestamp: 2026-07-09T14:09:53Z
+timestamp: 2026-07-10T02:44:33Z
 ---
 
 # pyproject
@@ -64,6 +64,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "ruff>=0.4.0",
     "mypy>=1.11.0",
+    "aiosqlite>=0.20.0",
 ]
 
 [project.scripts]

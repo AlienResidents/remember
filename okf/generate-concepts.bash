@@ -351,6 +351,7 @@ log "  dry run: ${dry_run}"
 log ""
 
 # Collect all tracked files
+cd "${repo_root}"
 mapfile -t all_files < <(git ls-files 2>/dev/null)
 
 gen_count=0

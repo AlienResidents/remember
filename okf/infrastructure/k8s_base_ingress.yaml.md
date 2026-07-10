@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "apiVersion: networking.k8s.io/v1"
 resource: k8s/base/ingress.yaml
-timestamp: 2026-07-09T14:09:52Z
+timestamp: 2026-07-10T02:44:32Z
 ---
 
 # ingress

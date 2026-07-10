@@ -71,24 +71,25 @@ async def search_memories(
     types: list[str] | None = None,
     tags: list[str] | None = None,
     limit: int = 10,
+    ctx: Context | None = None,
 ) -> list[dict]:
     """Search memories by full-text query. Returns ranked metadata (no body)."""
-    return await _search_memories(query=query, types=types, tags=tags, limit=limit)
+    owner_id = await resolve_user_id(ctx)
+    return await _search_memories(query=query, types=types, tags=tags, limit=limit, owner_id=owner_id)
 
 
 @mcp.tool()
-async def get_memory(id: str, user_id: str | None = None, ctx: Context | None = None) -> dict | None:
+async def get_memory(id: str, ctx: Context | None = None) -> dict | None:
     """Get full memory including body, history count, and confirmations."""
-    resolved_user_id = await resolve_user_id(user_id, ctx) if user_id else None
+    user_id = await resolve_user_id(ctx)
     return await _get_memory(
         memory_id=uuid_module.UUID(id),
-        user_id=resolved_user_id,
+        user_id=user_id,
     )
 
 
 @mcp.tool()
 async def list_memories(
-    owner: str | None = None,
     type: str | None = None,
     tag: str | None = None,
     status: str = "active",
@@ -98,9 +99,9 @@ async def list_memories(
     ctx: Context | None = None,
 ) -> list[dict]:
     """Browse memories with pagination and filters."""
-    resolved_owner = await resolve_user_id(owner, ctx) if owner else None
+    owner_id = await resolve_user_id(ctx)
     return await _list_memories(
-        owner_id=resolved_owner,
+        owner_id=owner_id,
         type=type,
         tag=tag,
         status=status,
@@ -110,9 +111,10 @@ async def list_memories(
 
 
 @mcp.tool()
-async def get_stale_memories(threshold_days: int = 90) -> list[dict]:
+async def get_stale_memories(threshold_days: int = 90, ctx: Context | None = None) -> list[dict]:
     """Return memories older than the threshold (default 90 days)."""
-    return await _get_stale_memories(threshold_days=threshold_days)
+    owner_id = await resolve_user_id(ctx)
+    return await _get_stale_memories(threshold_days=threshold_days, owner_id=owner_id)
 
 
 @mcp.tool()
@@ -121,67 +123,65 @@ async def save_memory(
     type: str,
     description: str,
     body: str,
-    owner_id: str | None = None,
     tags: list[str] | None = None,
     import_source: str | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Save or update a memory. Owner-only write."""
-    resolved_owner = await resolve_user_id(owner_id, ctx)
+    owner_id = await resolve_user_id(ctx)
     return await _save_memory(
         name=name,
         type=type,
         description=description,
         body=body,
-        owner_id=resolved_owner,
+        owner_id=owner_id,
         tags=tags,
         import_source=import_source,
     )
 
 
 @mcp.tool()
-async def verify_memory(memory_id: str, user_id: str | None = None, ctx: Context | None = None) -> dict:
+async def verify_memory(memory_id: str, ctx: Context | None = None) -> dict:
     """Mark a memory as verified. Owner-only."""
-    resolved_user = await resolve_user_id(user_id, ctx)
+    user_id = await resolve_user_id(ctx)
     return await _verify_memory(
         memory_id=uuid_module.UUID(memory_id),
-        user_id=resolved_user,
+        user_id=user_id,
     )
 
 
 @mcp.tool()
-async def archive_memory(memory_id: str, user_id: str | None = None, ctx: Context | None = None) -> dict:
+async def archive_memory(memory_id: str, ctx: Context | None = None) -> dict:
     """Archive a memory. Owner-only."""
-    resolved_user = await resolve_user_id(user_id, ctx)
+    user_id = await resolve_user_id(ctx)
     return await _archive_memory(
         memory_id=uuid_module.UUID(memory_id),
-        user_id=resolved_user,
+        user_id=user_id,
     )
 
 
 @mcp.tool()
 async def confirm_memory(
     memory_id: str,
-    user_id: str | None = None,
     note: str | None = None,
     ctx: Context | None = None,
 ) -> dict:
     """Confirm a memory's accuracy. Any user can confirm."""
-    resolved_user = await resolve_user_id(user_id, ctx)
+    user_id = await resolve_user_id(ctx)
     return await _confirm_memory(
         memory_id=uuid_module.UUID(memory_id),
-        user_id=resolved_user,
+        user_id=user_id,
         note=note,
     )
 
 
 @mcp.tool()
-async def refute_memory(memory_id: str, reason: str, user_id: str | None = None, ctx: Context | None = None) -> dict:
+async def refute_memory(memory_id: str, reason: str, ctx: Context | None = None) -> dict:
     """Refute a memory's accuracy. Any user can refute."""
-    resolved_user = await resolve_user_id(user_id, ctx)
+    user_id = await resolve_user_id(ctx)
     return await _refute_memory(
         memory_id=uuid_module.UUID(memory_id),
-        user_id=resolved_user,
+        user_id=user_id,
         reason=reason,
     )
 
@@ -189,12 +189,13 @@ async def refute_memory(memory_id: str, reason: str, user_id: str | None = None,
 # ---------------------------------------------------------------------------
 # User identity resolution
 # ---------------------------------------------------------------------------
-# Tools accept owner_id/user_id as strings from MCP clients. These can be:
-#   1. A UUID string (from a client that knows the UUID) → parsed directly
-#   2. A username string (from the extension's settings.json injection) →
-#      get-or-create a User by (provider="keycloak", provider_id=username)
-#   3. None (no identity provided) → fallback to request.state.auth_username
-#      which the middleware set from the JWT azp → client_user_mapping (Option A)
+# H1 fix: identity is derived EXCLUSIVELY from the JWT (via ctx).
+# Client-supplied owner_id/user_id params are no longer accepted —
+# the server does not trust the client for authorization decisions.
+#
+# The middleware extracts azp from the JWT, looks up client_user_mapping,
+# and stashes auth_username on request.state. This function reads that
+# and resolves it to a UUID via get-or-create on the User table.
 
 
 async def get_or_create_user(username: str) -> uuid_module.UUID:
@@ -221,22 +222,13 @@ async def get_or_create_user(username: str) -> uuid_module.UUID:
         return user.id
 
 
-async def resolve_user_id(
-    identity: str | None,
-    ctx: Context | None = None,
-) -> uuid_module.UUID:
-    """Resolve a user identity string to a UUID.
+async def resolve_user_id(ctx: Context | None = None) -> uuid_module.UUID:
+    """Resolve the authenticated user's UUID from the JWT via ctx.
 
-    See module docstring above for the three-tier resolution flow.
+    H1 fix: identity comes exclusively from the JWT azp claim (set by
+    the middleware via client_user_mapping). Client-supplied identity
+    strings are NOT accepted — the server does not trust the client.
     """
-    if identity:
-        try:
-            return uuid_module.UUID(identity)
-        except ValueError:
-            # Not a UUID — treat as username, get-or-create
-            return await get_or_create_user(identity)
-
-    # Option A fallback: derive from request state (set by middleware from JWT)
     if ctx is not None:
         try:
             request = ctx.request_context.request
@@ -248,8 +240,7 @@ async def resolve_user_id(
                 return await get_or_create_user(username)
 
     raise ValueError(
-        "No user identity provided and no fallback available "
-        "(configure REMEMBER_AUTH__CLIENT_USER_MAPPING or inject owner_id)"
+        "No user identity in JWT — configure REMEMBER_AUTH__CLIENT_USER_MAPPING"
     )
 
 

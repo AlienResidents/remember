@@ -14,6 +14,7 @@ Access tokens are stored in the session and used for DB operations.
 
 import json
 import os
+import secrets
 import uuid
 from pathlib import Path
 from urllib.parse import urlencode
@@ -91,25 +92,50 @@ def _redirect_uri() -> str:
 
 @app.get("/login")
 async def login(request: Request):
-    """Redirect to Keycloak authorization endpoint."""
+    """Redirect to Keycloak authorization endpoint.
+
+    Includes a random state parameter to prevent login CSRF.
+    The state is stored in the session and verified in the callback.
+    """
     if not _keycloak_enabled():
         return RedirectResponse("/")
+
+    # Generate a random state parameter to prevent login CSRF
+    state = secrets.token_urlsafe(32)
+    request.session["oauth_state"] = state
 
     params = {
         "client_id": settings.auth.keycloak_client_id,
         "redirect_uri": _redirect_uri(),
         "response_type": "code",
         "scope": "openid profile email",
+        "state": state,
     }
     auth_url = f"{_keycloak_base()}/protocol/openid-connect/auth?{urlencode(params)}"
     return RedirectResponse(auth_url)
 
 
 @app.get("/auth/callback")
-async def auth_callback(code: str, request: Request):
-    """Exchange authorization code for tokens, store in session, redirect home."""
+async def auth_callback(
+    code: str,
+    state: str,
+    request: Request,
+):
+    """Exchange authorization code for tokens, store in session, redirect home.
+
+    Security:
+    - Verifies the state parameter matches the one stored in the session
+      to prevent login CSRF.
+    - Fails hard (403) if Keycloak userinfo is unavailable — no silent
+      fallback to a default user.
+    """
     if not _keycloak_enabled():
         return RedirectResponse("/")
+
+    # Verify state parameter to prevent login CSRF
+    expected_state = request.session.pop("oauth_state", None)
+    if not expected_state or not secrets.compare_digest(state, expected_state):
+        raise HTTPException(status_code=403, detail="Invalid OAuth state — possible login CSRF attempt")
 
     # Exchange code for tokens
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -125,7 +151,7 @@ async def auth_callback(code: str, request: Request):
         )
 
     if resp.status_code != 200:
-        raise HTTPException(status_code=400, detail=f"Token exchange failed: {resp.text}")
+        raise HTTPException(status_code=400, detail="Token exchange failed")
 
     tokens = resp.json()
 
@@ -136,9 +162,15 @@ async def auth_callback(code: str, request: Request):
             headers={"Authorization": f"Bearer {tokens['access_token']}"},
         )
 
-    user_info = {}
-    if userinfo_resp.status_code == 200:
-        user_info = userinfo_resp.json()
+    if userinfo_resp.status_code != 200:
+        # C3 fix: fail hard, do NOT fall back to a default UUID
+        raise HTTPException(status_code=502, detail="Keycloak userinfo endpoint unavailable")
+
+    user_info = userinfo_resp.json()
+
+    if not user_info or "sub" not in user_info:
+        # C3 fix: fail hard, do NOT fall back to a default UUID
+        raise HTTPException(status_code=502, detail="Keycloak returned incomplete user info")
 
     # Get or create user in database
     user_id = await _get_or_create_user(user_info)
@@ -200,10 +232,13 @@ async def get_current_user(request: Request) -> uuid.UUID:
 # ---------------------------------------------------------------------------
 
 async def _get_or_create_user(user_info: dict) -> uuid.UUID:
-    """Get or create a user record from Keycloak userinfo."""
+    """Get or create a user record from Keycloak userinfo.
+
+    Raises ValueError if userinfo is incomplete — caller must handle
+    (the /auth/callback endpoint returns 502 in this case).
+    """
     if not user_info or "sub" not in user_info:
-        # No userinfo — return a default UUID for service-account-only tokens
-        return uuid.UUID("00000000-0000-0000-0000-000000000001")
+        raise ValueError("Incomplete Keycloak userinfo: missing 'sub' claim")
 
     provider_id = str(user_info["sub"])
 
@@ -256,6 +291,7 @@ async def api_search(
             query=query,
             types=[type] if type else None,
             limit=limit,
+            owner_id=user_id,
             db=db,
         )
     return results

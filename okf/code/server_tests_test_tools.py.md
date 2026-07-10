@@ -2,7 +2,7 @@
 type: Source Code
 description: "Tests for MCP tools."
 resource: server/tests/test_tools.py
-timestamp: 2026-07-09T14:09:54Z
+timestamp: 2026-07-10T02:44:34Z
 ---
 
 # test tools
@@ -18,6 +18,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from remember.models import User, Memory
@@ -51,7 +52,6 @@ async def test_save_memory(db_session: AsyncSession, test_user: User):
 
     # Verify memory was created
     stmt = select(Memory).where(Memory.name == "test-save")
-    query = await db_session.execute(stmt)
 ```
 
 *…truncated — full source at `server/tests/test_tools.py`*

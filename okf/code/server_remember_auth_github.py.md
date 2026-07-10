@@ -2,7 +2,7 @@
 type: Source Code
 description: "GitHub OAuth authentication provider."
 resource: server/remember/auth/github.py
-timestamp: 2026-07-09T14:09:53Z
+timestamp: 2026-07-10T02:44:33Z
 ---
 
 # github

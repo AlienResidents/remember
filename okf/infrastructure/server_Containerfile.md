@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "# REMEMBER Server - Podman Containerfile"
 resource: server/Containerfile
-timestamp: 2026-07-09T14:09:53Z
+timestamp: 2026-07-10T02:44:33Z
 ---
 
 # Containerfile
@@ -40,8 +40,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r remember && useradd -r -g remember remember
+# Create non-root user with explicit UID/GID 1000 (matches securityContext)
+RUN groupadd -r -g 1000 remember && useradd -r -u 1000 -g 1000 remember
 
 WORKDIR /app
 
