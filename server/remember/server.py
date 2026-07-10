@@ -194,17 +194,21 @@ async def refute_memory(memory_id: str, reason: str, ctx: Context | None = None)
 # the server does not trust the client for authorization decisions.
 #
 # The middleware extracts azp from the JWT, looks up client_user_mapping,
-# and stashes auth_username on request.state. This function reads that
+# and stashes auth_provider_id on request.state. This function reads that
 # and resolves it to a UUID via get-or-create on the User table.
+#
+# The mapping value MUST be the Keycloak user's `sub` claim (the immutable
+# OIDC subject identifier), NOT a username. The web UI also uses `sub` as
+# provider_id, so both paths converge on the same User row.
 
 
-async def get_or_create_user(username: str) -> uuid_module.UUID:
-    """Get or create a User by keycloak provider_id (username)."""
+async def get_or_create_user_by_provider_id(provider_id: str) -> uuid_module.UUID:
+    """Get or create a User by Keycloak provider_id (the `sub` claim)."""
     async with async_session_factory() as db:
         result = await db.execute(
             select(User).where(
                 User.provider == "keycloak",
-                User.provider_id == username,
+                User.provider_id == provider_id,
             )
         )
         user = result.scalar_one_or_none()
@@ -213,8 +217,8 @@ async def get_or_create_user(username: str) -> uuid_module.UUID:
 
         user = User(
             provider="keycloak",
-            provider_id=username,
-            display_name=username,
+            provider_id=provider_id,
+            display_name=provider_id,
         )
         db.add(user)
         await db.commit()
@@ -235,9 +239,9 @@ async def resolve_user_id(ctx: Context | None = None) -> uuid_module.UUID:
         except Exception:
             request = None
         if request is not None:
-            username = getattr(request.state, "auth_username", "")
-            if username:
-                return await get_or_create_user(username)
+            provider_id = getattr(request.state, "auth_provider_id", "")
+            if provider_id:
+                return await get_or_create_user_by_provider_id(provider_id)
 
     raise ValueError(
         "No user identity in JWT — configure REMEMBER_AUTH__CLIENT_USER_MAPPING"
@@ -300,11 +304,11 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
                 status_code=503,
             )
 
-        # Stash fallback username on request state (Option A fallback).
-        # Tools can read this via ctx.request_context.request.state.auth_username
-        # when no explicit owner_id/user_id is provided by the caller.
+        # Stash the provider_id (Keycloak `sub`) on request state.
+        # Tools can read this via ctx.request_context.request.state.auth_provider_id
+        # The mapping value MUST be the Keycloak user's `sub`, not a username.
         azp = payload.get("azp", "")
-        request.state.auth_username = settings.auth.client_user_mapping.get(azp, "")
+        request.state.auth_provider_id = settings.auth.client_user_mapping.get(azp, "")
 
         return await call_next(request)
 
