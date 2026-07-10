@@ -15,6 +15,7 @@ import uuid as uuid_module
 from datetime import datetime
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from remember.config import settings
 from remember.db import init_db, close_db, async_session_factory
@@ -75,7 +76,8 @@ async def search_memories(
 ) -> list[dict]:
     """Search memories by full-text query. Returns ranked metadata (no body)."""
     owner_id = await resolve_user_id(ctx)
-    return await _search_memories(query=query, types=types, tags=tags, limit=limit, owner_id=owner_id)
+    # L8: Cap limit to prevent unbounded queries (DoS / resource exhaustion)
+    return await _search_memories(query=query, types=types, tags=tags, limit=min(limit, 100), owner_id=owner_id)
 
 
 @mcp.tool()
@@ -100,13 +102,15 @@ async def list_memories(
 ) -> list[dict]:
     """Browse memories with pagination and filters."""
     owner_id = await resolve_user_id(ctx)
+    # L8: Cap limit to prevent unbounded queries (DoS / resource exhaustion)
+    capped_limit = min(limit, 500)
     return await _list_memories(
         owner_id=owner_id,
         type=type,
         tag=tag,
         status=status,
         updated_since=datetime.fromisoformat(updated_since) if updated_since else None,
-        limit=limit + offset,
+        limit=capped_limit + offset,
     )
 
 
@@ -190,20 +194,34 @@ async def refute_memory(memory_id: str, reason: str, ctx: Context | None = None)
 # User identity resolution
 # ---------------------------------------------------------------------------
 # Identity is derived EXCLUSIVELY from the JWT `sub` claim (OIDC subject).
-# The `sub` is the user's immutable Keycloak UUID — it never changes per
+# The `sub` is the user's immutable Keycloak UUID -- it never changes per
 # user per issuer, even if username/email changes (OIDC spec).
 #
 # The middleware extracts `sub` from the validated JWT and stashes it on
 # request.state.auth_provider_id. This function reads that and resolves
 # it to a UUID via get-or-create on the User table.
 #
-# Both MCP (authorization_code + PKCE) and web UI paths use `sub` as
-# provider_id, so they converge on the same User row automatically —
-# no client_user_mapping needed.
+# Both MCP (device flow + PKCE) and web UI (authorization_code + PKCE) paths
+# use `sub` as provider_id, so they converge on the same User row
+# automatically -- no client_user_mapping needed.
+#
+# L4 WARNING: This assumes Keycloak uses PUBLIC subject identifiers (same
+# `sub` UUID across all clients for one user). If pairwise subjects are
+# enabled on either the `remember-pi-oauth` or `remember-web` client, the
+# two paths will get different `sub` values for the same human, and
+# identity convergence breaks silently. Do NOT enable pairwise subjects
+# on either client. See web.py docstring for the same warning.
 
 
 async def get_or_create_user_by_provider_id(provider_id: str) -> uuid_module.UUID:
-    """Get or create a User by Keycloak provider_id (the `sub` claim)."""
+    """Get or create a User by Keycloak provider_id (the `sub` claim).
+
+    L3: Handles the concurrent get-or-create race condition. Without a unique
+    constraint, two simultaneous first-login requests for the same Keycloak
+    user could create two User rows. The unique constraint on
+       (provider, provider_id) prevents this; we catch IntegrityError and
+    re-fetch the existing row.
+    """
     async with async_session_factory() as db:
         result = await db.execute(
             select(User).where(
@@ -221,7 +239,20 @@ async def get_or_create_user_by_provider_id(provider_id: str) -> uuid_module.UUI
             display_name=provider_id,
         )
         db.add(user)
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            # L3: Race condition — another concurrent request created this user.
+            # Roll back and re-fetch the existing row.
+            await db.rollback()
+            result = await db.execute(
+                select(User).where(
+                    User.provider == "keycloak",
+                    User.provider_id == provider_id,
+                )
+            )
+            user = result.scalar_one()
+            return user.id
         await db.refresh(user)
         return user.id
 
@@ -343,6 +374,16 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         expected_client = settings.auth.keycloak_client_id
         if expected_client and payload.get("azp") != expected_client:
             raise _AuthError("Token from unauthorized client")
+
+        # L2: Verify audience if the aud claim is present.
+        # Defense-in-depth: if the token carries an `aud` claim, it must include
+        # our client ID. If `aud` is absent (some IdP configurations omit it),
+        # we rely on the azp check above.
+        aud = payload.get("aud")
+        if aud is not None and expected_client:
+            aud_list = [aud] if isinstance(aud, str) else list(aud)
+            if expected_client not in aud_list:
+                raise _AuthError("Token audience does not include this service")
 
         return payload
 

@@ -36,15 +36,14 @@ async def _verify_memory(
     db: AsyncSession,
 ) -> dict:
     """Internal verify implementation."""
-    stmt = select(Memory).where(Memory.id == memory_id)
+    # L6: Filter by owner_id in the query -- uniform "not found" error for
+    # both not-found and not-owned, so non-owners can't probe memory existence.
+    stmt = select(Memory).where(Memory.id == memory_id, Memory.owner_id == user_id)
     result = await db.execute(stmt)
     memory = result.scalar_one_or_none()
 
     if not memory:
         return {"error": "Memory not found"}
-
-    if memory.owner_id != user_id:
-        return {"error": "Only the owner can verify a memory"}
 
     memory.last_verified_at = datetime.now(timezone.utc)
     await db.commit()

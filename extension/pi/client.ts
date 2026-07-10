@@ -34,6 +34,10 @@ import { randomBytes, createHash } from "node:crypto";
 const AUTH_KEY = "remember-mcp";
 const SCOPES = "openid profile email";
 
+// L5: Timeout for all outbound HTTP calls (ms) — prevents indefinite hangs
+// if Keycloak is unreachable/blackholed.
+const FETCH_TIMEOUT = 10_000;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -157,6 +161,11 @@ function clearStoredTokens(): void {
 // ---------------------------------------------------------------------------
 
 let tokenCache: TokenCache | null = null;
+// M4: Single-flight — dedup concurrent refresh/device-flow calls.
+// If two tool calls see the token as expired simultaneously, both would start
+// a refresh (or worse, two device flows). This shared Promise ensures only
+// one refresh runs at a time; concurrent callers await the same result.
+let refreshInFlight: Promise<string> | null = null;
 
 function openBrowser(url: string): void {
   const platform = process.platform;
@@ -201,7 +210,9 @@ async function authorizeWithDeviceFlow(config: OAuthConfig): Promise<string> {
       client_id: config.clientId,
       code_challenge: codeChallenge,
       code_challenge_method: "S256",
+      scope: SCOPES, // L1: actually request the scopes we declared
     }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT), // L5
   });
 
   if (!deviceResponse.ok) {
@@ -248,6 +259,7 @@ async function authorizeWithDeviceFlow(config: OAuthConfig): Promise<string> {
         device_code: deviceData.device_code,
         code_verifier: codeVerifier,
       }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT), // L5
     });
 
     const tokenData = (await tokenResponse.json()) as {
@@ -308,6 +320,7 @@ async function refreshAccessToken(config: OAuthConfig): Promise<string> {
       client_id: config.clientId,
       refresh_token: stored.refreshToken,
     }),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT), // L5
   });
 
   if (!response.ok) {
@@ -335,8 +348,15 @@ async function refreshAccessToken(config: OAuthConfig): Promise<string> {
 /**
  * Get a valid access token:
  *   1. Return cached token if still valid
- *   2. Try refresh token if expired
- *   3. Fall back to device flow authorization if refresh fails
+ *   2. Try stored token if still valid
+ *   3. Try refresh token if expired
+ *   4. Fall back to device flow authorization if refresh fails
+ *
+ * M4: Single-flight — if a refresh/device-flow is already in progress,
+ * concurrent callers await the same promise instead of starting a second
+ * flow. Without this, two tool calls seeing an expired token simultaneously
+ * could start two device flows (confusing for the user — two browser tabs)
+ * or race on the auth.json file.
  */
 async function getAccessToken(): Promise<string> {
   // Return cached token if still valid (30s buffer for clock skew)
@@ -353,22 +373,46 @@ async function getAccessToken(): Promise<string> {
     return stored.accessToken;
   }
 
-  // Token expired — try refresh
-  if (stored?.refreshToken) {
+  // M4: Single-flight — if a refresh/device-flow is already in progress,
+  // await the same promise instead of starting a second one.
+  if (refreshInFlight) {
+    return refreshInFlight;
+  }
+
+  // Token expired — try refresh, fall back to device flow
+  refreshInFlight = (async () => {
     try {
-      return await refreshAccessToken(config);
+      if (stored?.refreshToken) {
+        return await refreshAccessToken(config);
+      }
     } catch {
       // Refresh failed — fall through to device flow
     }
-  }
+    return authorizeWithDeviceFlow(config);
+  })().finally(() => {
+    refreshInFlight = null;
+  });
 
-  // No stored tokens or refresh failed — device flow
-  return authorizeWithDeviceFlow(config);
+  return refreshInFlight;
 }
 
-/** Clear the in-memory token cache — used when a 401 is received. */
+/**
+ * Clear the token cache — used when a 401 is received.
+ *
+ * M3: Also invalidates the stored token's expiry in auth.json. Without this,
+ * getAccessToken() would re-read the same (server-rejected) token from disk
+ * and the 401 retry would be inert — same token, same 401.
+ *
+ * Setting expiresAt=0 forces getAccessToken() to treat the stored token as
+ * expired and attempt a refresh (or device flow if refresh also fails).
+ */
 export function clearTokenCache(): void {
   tokenCache = null;
+  const stored = readStoredTokens();
+  if (stored) {
+    stored.expiresAt = 0;
+    writeStoredTokens(stored);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -429,6 +473,7 @@ export class RememberMcpClient {
         method: "tools/call",
         params: { name, arguments: args },
       }),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT), // L5
     });
 
     if (response.status === 401) {

@@ -1,7 +1,12 @@
 """Test configuration and fixtures."""
 
 import asyncio
+import os
 import uuid as uuid_module
+
+# M1/M5: Tests run in dev mode so the session-secret fail-hard check
+# doesn't abort. In production, dev_mode=False requires SESSION_SECRET.
+os.environ.setdefault("REMEMBER_AUTH__DEV_MODE", "true")
 
 import pytest
 import pytest_asyncio

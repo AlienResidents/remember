@@ -1,17 +1,30 @@
 """Web UI server for REMEMBER.
 
-Browser-based OAuth flow via Keycloak (authorization_code grant):
+Browser-based OAuth flow via Keycloak (authorization_code + PKCE grant):
   1. User visits / → static UI shell loads (no sensitive data)
   2. JS calls /api/* → 401 if not authenticated → JS redirects to /login
-  3. /login → redirect to Keycloak authorization endpoint
+  3. /login → redirect to Keycloak authorization endpoint (with PKCE challenge)
   4. User logs in at Keycloak → redirected back to /auth/callback
-  5. /auth/callback → exchange code for tokens → store in session cookie → redirect /
+  5. /auth/callback → exchange code + PKCE verifier for tokens → store in session → redirect /
   6. JS retries /api/* with session cookie → succeeds
 
-Session cookies are signed + encrypted by SessionMiddleware using session_secret.
-Access tokens are stored in the session and used for DB operations.
+Security:
+- PKCE (S256) protects against authorization-code interception even for
+  confidential clients (RFC 9700 / OAuth 2.1 recommendation).
+- OAuth `state` parameter prevents login CSRF (random, single-use, session-stored).
+- Session cookies are signed + encrypted by SessionMiddleware using session_secret.
+- Access tokens stored in session, used for DB operations.
+
+Identity: uses the Keycloak `sub` (OIDC subject) as provider_id — same as the
+MCP path. WARNING: this assumes Keycloak uses PUBLIC subject identifiers
+(same UUID across all clients for one user). If pairwise subjects are enabled
+on either the `remember-web` or `remember-pi-oauth` client, the two paths will
+get different `sub` values for the same human, and identity convergence breaks
+silently. Do NOT enable pairwise subjects on either client.
 """
 
+import base64
+import hashlib
 import json
 import os
 import secrets
@@ -59,8 +72,16 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
         return response
 
 
-# Session middleware — signs/encrypts the session cookie
-# In dev mode, use a fixed dummy secret; in production, require a real secret
+# Session middleware — signs/encrypts the session cookie.
+# M1: Fail-hard — refuse to start in non-dev mode without a real session secret.
+# A hardcoded fallback secret (in a public repo) would let anyone forge session
+# cookies with arbitrary user_id, bypassing all web UI auth. This is the same
+# fail-open class C3 was meant to kill.
+if not settings.auth.dev_mode and not settings.auth.session_secret:
+    raise RuntimeError(
+        "SESSION_SECRET is required when dev_mode is disabled. "
+        "Refusing to start with a hardcoded fallback — set REMEMBER_AUTH__SESSION_SECRET."
+    )
 _session_secret = settings.auth.session_secret or "dev-only-insecure-secret-change-me"
 app.add_middleware(SessionMiddleware, secret_key=_session_secret, https_only=True, same_site="lax")
 app.add_middleware(NoCacheMiddleware)
@@ -94,8 +115,9 @@ def _redirect_uri() -> str:
 async def login(request: Request):
     """Redirect to Keycloak authorization endpoint.
 
-    Includes a random state parameter to prevent login CSRF.
-    The state is stored in the session and verified in the callback.
+    Includes:
+    - Random `state` parameter to prevent login CSRF (stored in session, verified on callback)
+    - PKCE code_challenge (S256) to protect against authorization-code interception
     """
     if not _keycloak_enabled():
         return RedirectResponse("/")
@@ -104,12 +126,21 @@ async def login(request: Request):
     state = secrets.token_urlsafe(32)
     request.session["oauth_state"] = state
 
+    # M2: Generate PKCE code_verifier and compute code_challenge (S256)
+    code_verifier = secrets.token_urlsafe(64)
+    request.session["oauth_code_verifier"] = code_verifier
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier.encode()).digest()
+    ).decode().rstrip("=")
+
     params = {
         "client_id": settings.auth.keycloak_client_id,
         "redirect_uri": _redirect_uri(),
         "response_type": "code",
         "scope": "openid profile email",
         "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
     }
     auth_url = f"{_keycloak_base()}/protocol/openid-connect/auth?{urlencode(params)}"
     return RedirectResponse(auth_url)
@@ -124,9 +155,11 @@ async def auth_callback(
     """Exchange authorization code for tokens, store in session, redirect home.
 
     Security:
-    - Verifies the state parameter matches the one stored in the session
+    - Verifies the `state` parameter matches the one stored in the session
       to prevent login CSRF.
-    - Fails hard (403) if Keycloak userinfo is unavailable — no silent
+    - Verifies the PKCE `code_verifier` matches the challenge sent in /login
+      to prevent authorization-code interception.
+    - Fails hard (502) if Keycloak userinfo is unavailable — no silent
       fallback to a default user.
     """
     if not _keycloak_enabled():
@@ -137,7 +170,12 @@ async def auth_callback(
     if not expected_state or not secrets.compare_digest(state, expected_state):
         raise HTTPException(status_code=403, detail="Invalid OAuth state — possible login CSRF attempt")
 
-    # Exchange code for tokens
+    # M2: Verify PKCE code_verifier is present (session may have been tampered with)
+    code_verifier = request.session.pop("oauth_code_verifier", None)
+    if not code_verifier:
+        raise HTTPException(status_code=403, detail="Missing PKCE verifier — possible session tampering")
+
+    # Exchange code for tokens (with PKCE verifier)
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
             f"{_keycloak_base()}/protocol/openid-connect/token",
@@ -147,6 +185,7 @@ async def auth_callback(
                 "client_secret": settings.auth.keycloak_client_secret,
                 "code": code,
                 "redirect_uri": _redirect_uri(),
+                "code_verifier": code_verifier,
             },
         )
 

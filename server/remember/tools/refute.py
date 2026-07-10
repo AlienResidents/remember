@@ -39,8 +39,10 @@ async def _refute_memory(
     db: AsyncSession,
 ) -> dict:
     """Internal refute implementation."""
-    # Check if memory exists
-    stmt = select(Memory).where(Memory.id == memory_id)
+    # L6: Check ownership alongside existence -- uniform error for both
+    # cases so non-owners can't probe memory existence by distinguishing
+    # "not found" from "not authorized".
+    stmt = select(Memory).where(Memory.id == memory_id, Memory.owner_id == user_id)
     result = await db.execute(stmt)
     memory = result.scalar_one_or_none()
 

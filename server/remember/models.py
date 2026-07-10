@@ -42,6 +42,14 @@ class User(Base):
     # Relationships
     memories = relationship("Memory", back_populates="owner", cascade="all, delete-orphan")
 
+    # L3: Unique constraint on (provider, provider_id) — prevents duplicate
+    # users from concurrent get-or-create race conditions. Without this, two
+    # simultaneous first-login requests for the same Keycloak user could
+    # create two User rows, splitting their memories across two identities.
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_id", name="users_provider_provider_id_uk"),
+    )
+
     def __repr__(self) -> str:
         return f"<User(id={self.id}, provider={self.provider}, provider_id={self.provider_id})>"
 

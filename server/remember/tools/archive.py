@@ -35,15 +35,14 @@ async def _archive_memory(
     db: AsyncSession,
 ) -> dict:
     """Internal archive implementation."""
-    stmt = select(Memory).where(Memory.id == memory_id)
+    # L6: Filter by owner_id in the query -- uniform "not found" error for
+    # both not-found and not-owned, so non-owners can't probe memory existence.
+    stmt = select(Memory).where(Memory.id == memory_id, Memory.owner_id == user_id)
     result = await db.execute(stmt)
     memory = result.scalar_one_or_none()
 
     if not memory:
         return {"error": "Memory not found"}
-
-    if memory.owner_id != user_id:
-        return {"error": "Only the owner can archive a memory"}
 
     memory.status = "archived"
     await db.commit()
