@@ -168,6 +168,17 @@ let tokenCache: TokenCache | null = null;
 let refreshInFlight: Promise<string> | null = null;
 
 function openBrowser(url: string): void {
+  // Defense-in-depth: validate URL scheme before passing to any process.
+  // The URL comes from Keycloak's device authorization response
+  // (verification_uri_complete). If the auth endpoint is compromised or
+  // MITM'd, a malicious URL could contain shell metacharacters. On Windows,
+  // `cmd /c start` interprets `&` as a command separator — a URL like
+  // `https://evil/?x=1&calc.exe` would execute `calc.exe`.
+  // Reject anything that isn't http:// or https://.
+  if (!/^https?:\/\//i.test(url)) {
+    return;
+  }
+
   const platform = process.platform;
   let cmd: string;
   let args: string[];
@@ -176,8 +187,11 @@ function openBrowser(url: string): void {
     cmd = "open";
     args = [url];
   } else if (platform === "win32") {
-    cmd = "cmd";
-    args = ["/c", "start", "", url];
+    // Avoid `cmd /c start` — cmd.exe is a shell and would interpret
+    // metacharacters in the URL. rundll32 with url.dll,FileProtocolHandler
+    // opens the URL in the default browser without shell interpretation.
+    cmd = "rundll32";
+    args = ["url.dll,FileProtocolHandler", url];
   } else {
     cmd = "xdg-open";
     args = [url];
