@@ -338,9 +338,16 @@ async function refreshAccessToken(config: OAuthConfig): Promise<string> {
   });
 
   if (!response.ok) {
-    // Refresh failed — need to re-authorize
+    // Refresh failed — clear stored tokens and surface the error.
+    // Do NOT fall back to authorizeWithDeviceFlow() inline: that polls
+    // Keycloak for up to 120s waiting for browser login, which hangs
+    // headless tool calls until pi's watchdog kills them at ~30s.
+    // The user must re-authenticate explicitly via the login tool/command.
     clearStoredTokens();
-    return authorizeWithDeviceFlow(config);
+    throw new Error(
+      `OAuth refresh failed (${response.status}). ` +
+        `Re-authentication required — run: pi remember login`,
+    );
   }
 
   const data = (await response.json()) as {
@@ -393,16 +400,27 @@ async function getAccessToken(): Promise<string> {
     return refreshInFlight;
   }
 
-  // Token expired — try refresh, fall back to device flow
+  // Token expired — try refresh. If refresh fails (or there's no refresh
+  // token), throw an auth error. Do NOT fall back to authorizeWithDeviceFlow()
+  // inline: that polls Keycloak for up to 120s waiting for browser login,
+  // which hangs headless tool calls until pi's watchdog kills them at ~30s.
+  // The user must re-authenticate explicitly via the login tool/command.
   refreshInFlight = (async () => {
     try {
       if (stored?.refreshToken) {
         return await refreshAccessToken(config);
       }
-    } catch {
-      // Refresh failed — fall through to device flow
+    } catch (e) {
+      throw new Error(
+        `Authentication required — refresh failed: ` +
+          `${e instanceof Error ? e.message : String(e)}. ` +
+          `Run: pi remember login`,
+      );
     }
-    return authorizeWithDeviceFlow(config);
+    throw new Error(
+      `No refresh token available. Re-authentication required — ` +
+        `run: pi remember login`,
+    );
   })().finally(() => {
     refreshInFlight = null;
   });
@@ -427,6 +445,22 @@ export function clearTokenCache(): void {
     stored.expiresAt = 0;
     writeStoredTokens(stored);
   }
+}
+
+/**
+ * Explicit login entry point — runs the OAuth device authorization flow.
+ *
+ * This is the ONLY place authorizeWithDeviceFlow() should be called from.
+ * Tool calls (callTool → getAccessToken) throw auth errors instead of
+ * falling back to device flow inline, because inline device flow polls
+ * for 120s and hangs headless sessions. Users trigger this deliberately.
+ *
+ * Returns the new access token on success.
+ */
+export async function login(): Promise<string> {
+  const config = readOAuthConfig();
+  tokenCache = null; // invalidate cache so the new token takes effect
+  return authorizeWithDeviceFlow(config);
 }
 
 // ---------------------------------------------------------------------------

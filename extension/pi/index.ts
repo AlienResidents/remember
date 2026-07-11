@@ -220,6 +220,38 @@ function registerTools(
   pi: ExtensionAPI,
   client: RememberMcpClient,
 ): void {
+  // Login tool — explicit re-authentication via OAuth device flow.
+  // Tool calls never fall back to device flow inline (that hangs headless
+  // sessions); they throw an auth error pointing here instead.
+  pi.registerTool({
+    name: `${PREFIX}login`,
+    label: `${LABEL}: Login`,
+    description:
+      "Re-authenticate to the REMEMBER server via OAuth device flow. " +
+      "Use when other remember__ tools report an authentication error " +
+      "(e.g. 'Re-authentication required'). Opens a URL in your browser " +
+      "and polls until login completes.",
+    promptSnippet: "Login to REMEMBER",
+    parameters: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+    async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
+      const { login } = await import("./client");
+      const token = await login();
+      return {
+        content: [
+          {
+            type: "text",
+            text: `REMEMBER login successful. New access token cached (length ${token.length}).`,
+          },
+        ],
+        details: { server: "remember", tool: "login", isError: false },
+      };
+    },
+  });
+
   for (const tool of TOOLS) {
     const toolName = `${PREFIX}${tool.mcpName}`;
 
