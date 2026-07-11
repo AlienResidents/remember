@@ -36,11 +36,59 @@
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-import { RememberMcpClient } from "./client";
+import { RememberMcpClient, type DeviceFlowUI } from "./client";
 
 const LABEL = "REMEMBER";
 const PREFIX = "remember__";
 const DEFAULT_URL = "https://remember.cdd.net.au/mcp";
+const WIDGET_ID = "remember-login";
+const STATUS_ID = "remember-login";
+
+/**
+ * Build a TUI device-flow UI sink from a tool execute context.
+ *
+ * Renders the verification URL + user code as a widget above the editor,
+ * shows a polling indicator in the footer status line, and fires a toast
+ * notification on success or failure. The widget + status are cleared when
+ * the flow completes (success or failure).
+ *
+ * Returns null when ctx has no UI (print mode / JSON mode) so the client
+ * falls back to its console.log sink.
+ */
+function buildTuiUI(ctx: ExtensionContext): DeviceFlowUI | null {
+  if (!ctx.hasUI) return null;
+  const ui = ctx.ui;
+  return {
+    showDeviceCode(info) {
+      ui.setWidget(WIDGET_ID, [
+        "REMEMBER login — OAuth device authorization",
+        "",
+        "  Open this URL in your browser:",
+        `    ${info.verificationUriComplete}`,
+        "",
+        `  Or go to ${info.verificationUri} and enter code: ${info.userCode}`,
+        "",
+        `  Expires in ${info.expiresIn}s — polling until login completes...`,
+      ]);
+      ui.setStatus(STATUS_ID, "Waiting for REMEMBER login in browser...");
+    },
+    setWaiting(message) {
+      // Update the footer status with a poll tick. The widget already shows
+      // the full URL; the footer just signals we're still alive.
+      ui.setStatus(STATUS_ID, `Waiting for REMEMBER login in browser... ${message}`);
+    },
+    success(message) {
+      ui.setWidget(WIDGET_ID, undefined);
+      ui.setStatus(STATUS_ID, undefined);
+      ui.notify(message, "info");
+    },
+    failure(message) {
+      ui.setWidget(WIDGET_ID, undefined);
+      ui.setStatus(STATUS_ID, undefined);
+      ui.notify(message, "error");
+    },
+  };
+}
 
 /**
  * Extension factory. Called once when pi loads this extension.
@@ -237,9 +285,10 @@ function registerTools(
       properties: {},
       required: [],
     },
-    async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
+    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
       const { login } = await import("./client");
-      const token = await login();
+      const ui = ctx ? buildTuiUI(ctx) ?? undefined : undefined;
+      const token = await login(ui);
       return {
         content: [
           {

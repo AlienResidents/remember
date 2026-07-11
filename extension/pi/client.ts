@@ -60,6 +60,57 @@ interface TokenCache {
 }
 
 // ---------------------------------------------------------------------------
+// UI sink for the device authorization flow
+// ---------------------------------------------------------------------------
+
+/**
+ * UI surface for the OAuth device flow. The flow itself lives in client.ts
+ * (no pi context here), but the presentation is driven by a UI sink that
+ * the caller injects. index.ts builds a sink from ctx.ui (setWidget for the
+ * URL+code block, setStatus for the polling indicator, notify for the
+ * final result). When no sink is supplied (defensive: called from a non-UI
+ * context such as a headless script), a console.log fallback is used.
+ */
+export interface DeviceFlowUI {
+  /** Show the verification URL + user code to the user. Called once. */
+  showDeviceCode(info: {
+    verificationUri: string;
+    verificationUriComplete: string;
+    userCode: string;
+    expiresIn: number;
+  }): void;
+  /** Update the polling status. Called periodically while waiting. */
+  setWaiting(message: string): void;
+  /** Login completed successfully. */
+  success(message: string): void;
+  /** Login failed or was denied. */
+  failure(message: string): void;
+}
+
+/** No-op + console fallback used when no UI sink is injected. */
+const consoleUI: DeviceFlowUI = {
+  showDeviceCode(info) {
+    console.log("\n=== OAuth Device Authorization Required ===");
+    console.log("Open this URL in your browser to log in:\n");
+    console.log(info.verificationUriComplete);
+    console.log(
+      `\nOr go to ${info.verificationUri} and enter code: ${info.userCode}`,
+    );
+    console.log(`\nYou have ${info.expiresIn} seconds to complete login.`);
+  },
+  setWaiting(message) {
+    // Append a dot per poll so the user sees progress in headless mode.
+    process.stdout.write(message);
+  },
+  success(message) {
+    console.log(`\n${message}\n`);
+  },
+  failure(message) {
+    console.error(`\n${message}\n`);
+  },
+};
+
+// ---------------------------------------------------------------------------
 // PKCE helpers (RFC 7636)
 // ---------------------------------------------------------------------------
 
@@ -212,7 +263,10 @@ function openBrowser(url: string): void {
  *   4. Poll the token endpoint until login completes
  *   5. Store tokens in auth.json
  */
-async function authorizeWithDeviceFlow(config: OAuthConfig): Promise<string> {
+async function authorizeWithDeviceFlow(
+  config: OAuthConfig,
+  ui: DeviceFlowUI = consoleUI,
+): Promise<string> {
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
 
@@ -243,20 +297,19 @@ async function authorizeWithDeviceFlow(config: OAuthConfig): Promise<string> {
     interval: number;
   };
 
-  // Step 2: Display the verification URL + user code
-  console.log("\n=== OAuth Device Authorization Required ===");
-  console.log("Open this URL in your browser to log in:\n");
-  console.log(deviceData.verification_uri_complete);
-  console.log(
-    `\nOr go to ${deviceData.verification_uri} and enter code: ${deviceData.user_code}`,
-  );
-  console.log(`\nYou have ${deviceData.expires_in} seconds to complete login.`);
+  // Step 2: Display the verification URL + user code via the UI sink
+  ui.showDeviceCode({
+    verificationUri: deviceData.verification_uri,
+    verificationUriComplete: deviceData.verification_uri_complete,
+    userCode: deviceData.user_code,
+    expiresIn: deviceData.expires_in,
+  });
 
   // Step 3: Open browser if possible (no-op on headless)
   openBrowser(deviceData.verification_uri_complete);
 
   // Step 4: Poll for tokens
-  console.log("\nWaiting for login...");
+  ui.setWaiting("Waiting for login");
 
   const pollInterval = (deviceData.interval ?? 5) * 1000;
   const expiry = Date.now() + (deviceData.expires_in ?? 120) * 1000;
@@ -293,12 +346,12 @@ async function authorizeWithDeviceFlow(config: OAuthConfig): Promise<string> {
       };
       writeStoredTokens(tokens);
       tokenCache = { token: tokens.accessToken, expiresAt: tokens.expiresAt };
-      console.log("Login successful!\n");
+      ui.success("REMEMBER login successful — tokens cached.");
       return tokens.accessToken;
     }
 
     if (tokenData.error === "authorization_pending") {
-      process.stdout.write(".");
+      ui.setWaiting(".");
       continue;
     }
     if (tokenData.error === "slow_down") {
@@ -308,12 +361,14 @@ async function authorizeWithDeviceFlow(config: OAuthConfig): Promise<string> {
     }
 
     // Real error (expired, denied, etc.)
-    throw new Error(
-      `Device flow error: ${tokenData.error} — ${tokenData.error_description ?? ""}`,
-    );
+    const msg = `Device flow error: ${tokenData.error} — ${tokenData.error_description ?? ""}`;
+    ui.failure(msg);
+    throw new Error(msg);
   }
 
-  throw new Error("Device authorization expired before login completed");
+  const msg = "Device authorization expired before login completed";
+  ui.failure(msg);
+  throw new Error(msg);
 }
 
 /**
@@ -322,8 +377,16 @@ async function authorizeWithDeviceFlow(config: OAuthConfig): Promise<string> {
 async function refreshAccessToken(config: OAuthConfig): Promise<string> {
   const stored = readStoredTokens();
   if (!stored?.refreshToken) {
-    // No refresh token — need to re-authorize
-    return authorizeWithDeviceFlow(config);
+    // No refresh token — surface the error. Do NOT fall back to
+    // authorizeWithDeviceFlow() inline: that polls Keycloak for up to
+    // 120s waiting for browser login, which hangs headless tool calls
+    // until pi's watchdog kills them at ~30s. The user must re-authenticate
+    // explicitly via the login tool/command.
+    clearStoredTokens();
+    throw new Error(
+      `No refresh token available. Re-authentication required — ` +
+        `run: pi remember login`,
+    );
   }
 
   const response = await fetch(config.tokenUrl, {
@@ -455,12 +518,17 @@ export function clearTokenCache(): void {
  * falling back to device flow inline, because inline device flow polls
  * for 120s and hangs headless sessions. Users trigger this deliberately.
  *
+ * The optional `ui` sink drives presentation (URL display, waiting
+ * indicator, success/failure notification). When omitted, a console.log
+ * fallback is used — suitable for headless/CLI contexts. The pi extension
+ * passes a sink built from ctx.ui so the flow renders in the TUI.
+ *
  * Returns the new access token on success.
  */
-export async function login(): Promise<string> {
+export async function login(ui?: DeviceFlowUI): Promise<string> {
   const config = readOAuthConfig();
   tokenCache = null; // invalidate cache so the new token takes effect
-  return authorizeWithDeviceFlow(config);
+  return authorizeWithDeviceFlow(config, ui);
 }
 
 // ---------------------------------------------------------------------------
