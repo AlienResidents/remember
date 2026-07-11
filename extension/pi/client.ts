@@ -32,7 +32,7 @@ import { randomBytes, createHash } from "node:crypto";
 // ---------------------------------------------------------------------------
 
 const AUTH_KEY = "remember-mcp";
-const SCOPES = "openid profile email";
+const SCOPES = "openid profile email offline_access";
 
 // L5: Timeout for all outbound HTTP calls (ms) — prevents indefinite hangs
 // if Keycloak is unreachable/blackholed.
