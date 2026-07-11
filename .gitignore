@@ -22,8 +22,12 @@ build/
 # Local dev artifacts
 server/README.md
 server/.venv/
+server/test_config/
 *.swo
 *~
+
+# Tool run output (strix, etc.)
+strix_runs/
 
 # OS
 .DS_Store
