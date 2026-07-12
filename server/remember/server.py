@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import logging.config
 from contextlib import asynccontextmanager
 
 import jwt
@@ -33,6 +34,41 @@ from remember.tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def configure_logging() -> None:
+    """Configure root logging from settings.
+
+    Called at import time so log level is configured before uvicorn serves
+    any request. Uses dictConfig to set the root logger level from
+    REMEMBER_SERVER__LOG_LEVEL without disturbing uvicorn's own loggers.
+    """
+    level_name = settings.server.log_level.upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.config.dictConfig({
+        "version": 1,
+        "disable_existing_loggers": False,
+        "formatters": {
+            "default": {
+                "format": "%(asctime)s %(levelname)s %(name)s: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
+        },
+        "handlers": {
+            "default": {
+                "class": "logging.StreamHandler",
+                "formatter": "default",
+                "stream": "ext://sys.stderr",
+            },
+        },
+        "root": {
+            "level": level,
+            "handlers": ["default"],
+        },
+    })
+
+
+configure_logging()
 
 mcp = FastMCP(
     "remember",
@@ -334,6 +370,7 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
         except _AuthError as e:
             return JSONResponse({"error": str(e)}, status_code=401)
         except Exception:
+            logger.exception("Auth service unavailable — JWT validation failed")
             return JSONResponse(
                 {"error": "Auth service unavailable"},
                 status_code=503,

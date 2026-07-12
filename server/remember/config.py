@@ -27,6 +27,10 @@ class ServerSettings(BaseSettings):
     host: str = Field(default="0.0.0.0", description="Bind address")
     port: int = Field(default=8000, description="Bind port")
     workers: int = Field(default=2, description="Number of workers")
+    log_level: str = Field(
+        default="INFO",
+        description="Root logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)",
+    )
 
 
 class AuthSettings(BaseSettings):

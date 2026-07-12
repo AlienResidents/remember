@@ -2,7 +2,7 @@
 type: Configuration
 description: "# REMEMBER Server Environment Variables"
 resource: server/.env.example
-timestamp: 2026-07-10T02:44:33Z
+timestamp: 2026-07-12T01:15:00Z
 ---
 
 # .env
@@ -22,6 +22,7 @@ REMEMBER_DATABASE__URL=postgresql+asyncpg://localhost:5432/remember
 REMEMBER_SERVER__HOST=0.0.0.0
 REMEMBER_SERVER__PORT=8000
 REMEMBER_SERVER__WORKERS=2
+REMEMBER_SERVER__LOG_LEVEL=INFO
 
 # Auth — shared
 REMEMBER_AUTH__DEV_MODE=true
