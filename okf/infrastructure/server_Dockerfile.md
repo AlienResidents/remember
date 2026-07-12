@@ -2,7 +2,7 @@
 type: Infrastructure
 description: "# REMEMBER Server - Docker Dockerfile"
 resource: server/Dockerfile
-timestamp: 2026-07-10T02:44:33Z
+timestamp: 2026-07-12T01:45:00Z
 ---
 
 # Dockerfile
@@ -50,6 +50,7 @@ COPY --from=builder /install /usr/local
 
 # Copy application code
 COPY server/remember/ ./remember/
+COPY server/webui/ ./webui/
 COPY server/alembic.ini ./
 COPY server/alembic/ ./alembic/
 
@@ -71,6 +72,6 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Default command
-CMD ["python", "-m", "uvicorn", "remember.server:mcp.app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "remember.server:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ```
