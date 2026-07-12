@@ -8,6 +8,51 @@ import { escapeHtml, renderMarkdown } from './utils.js';
 let memories = [];
 let currentMemory = null;
 
+// URL state management — encodes search query + filters + selected memory
+// as query params so refresh preserves state and memory URLs are shareable.
+// Schema: ?q=<query>&type=<type>&status=<status>&memory=<id>
+function getUrlState() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+        q: params.get('q') || '',
+        type: params.get('type') || '',
+        status: params.get('status') || '',
+        memory: params.get('memory') || '',
+    };
+}
+
+function getCurrentSearchState() {
+    return {
+        q: document.getElementById('search-input').value,
+        type: document.getElementById('filter-type').value,
+        status: document.getElementById('filter-status').value,
+    };
+}
+
+function updateUrl(state, { push = false } = {}) {
+    const params = new URLSearchParams();
+    if (state.q) params.set('q', state.q);
+    if (state.type) params.set('type', state.type);
+    if (state.status) params.set('status', state.status);
+    if (state.memory) params.set('memory', state.memory);
+    const search = params.toString();
+    const url = search
+        ? `${window.location.pathname}?${search}`
+        : window.location.pathname;
+    if (push) {
+        history.pushState({}, '', url);
+    } else {
+        history.replaceState({}, '', url);
+    }
+}
+
+function redirectToLogin() {
+    // Preserve the current URL (including query params) as `next` so the user
+    // returns to the same state — e.g. a shared memory deep link — after auth.
+    const next = window.location.pathname + window.location.search;
+    window.location.href = '/login?next=' + encodeURIComponent(next);
+}
+
 // Authenticated fetch wrapper — sends cookies and redirects to /login on 401
 async function apiFetch(url, options = {}) {
     const response = await fetch(url, {
@@ -15,7 +60,7 @@ async function apiFetch(url, options = {}) {
         credentials: 'same-origin',
     });
     if (response.status === 401) {
-        window.location.href = '/login';
+        redirectToLogin();
         throw new Error('Not authenticated — redirecting to login');
     }
     return response;
@@ -23,16 +68,18 @@ async function apiFetch(url, options = {}) {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-    // Check auth status — redirect to /login if not authenticated
+    // Check auth status — redirect to /login if not authenticated.
+    // Pass the current URL as `next` so the user returns to the same state
+    // (e.g. a shared memory deep link) after the OAuth round-trip completes.
     try {
         const resp = await fetch('/auth/status', { credentials: 'same-origin' });
         const auth = await resp.json();
         if (!auth.authenticated) {
-            window.location.href = '/login';
+            redirectToLogin();
             return;
         }
     } catch {
-        window.location.href = '/login';
+        redirectToLogin();
         return;
     }
 
@@ -40,6 +87,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     initSearch();
     initCreateForm();
     initThemeToggle();
+
+    // Restore state from URL (refresh / deep-link / back-forward persistence).
+    const urlState = getUrlState();
+    document.getElementById('search-input').value = urlState.q;
+    document.getElementById('filter-type').value = urlState.type;
+    document.getElementById('filter-status').value = urlState.status;
+
+    if (urlState.q.trim()) {
+        // Auto-run search to repopulate results (replaceState — no history entry).
+        await performSearch({ pushHistory: false });
+    }
+    if (urlState.memory) {
+        // Open the memory detail panel (replaceState on initial load;
+        // user-initiated clicks use pushState via showDetail's default).
+        await showDetail(urlState.memory, { pushHistory: false });
+    }
+
+    // Handle back/forward navigation — re-render from URL.
+    window.addEventListener('popstate', handlePopState);
 });
 
 // Particle background
@@ -66,7 +132,7 @@ function initSearch() {
     });
 }
 
-async function performSearch() {
+async function performSearch({ updateUrl: doUpdateUrl = true, pushHistory = false } = {}) {
     const query = document.getElementById('search-input').value;
     const type = document.getElementById('filter-type').value;
     const status = document.getElementById('filter-status').value;
@@ -94,6 +160,14 @@ async function performSearch() {
         
         const results = await response.json();
         displayResults(results);
+        
+        // Close detail panel on new search — fresh context, URL drops memory param.
+        document.getElementById('detail-panel').style.display = 'none';
+        currentMemory = null;
+        
+        if (doUpdateUrl) {
+            updateUrl({ q: query, type, status }, { push: pushHistory });
+        }
     } catch (error) {
         showToast('Search failed: ' + error.message, 'error');
     } finally {
@@ -139,7 +213,7 @@ function displayResults(results) {
 }
 
 // Detail view
-async function showDetail(memoryId) {
+async function showDetail(memoryId, { updateUrl: doUpdateUrl = true, pushHistory = true } = {}) {
     const panel = document.getElementById('detail-panel');
     const content = document.getElementById('detail-content');
     
@@ -189,11 +263,43 @@ async function showDetail(memoryId) {
         document.getElementById('verify-btn').onclick = () => verifyMemory(memoryId);
         document.getElementById('archive-btn').onclick = () => archiveMemory(memoryId);
         document.getElementById('refute-btn').onclick = () => refuteMemory(memoryId);
+        document.getElementById('copy-link-btn').onclick = () => copyLink(memoryId);
         
+        // Update URL to include the selected memory (shareable + refresh-safe).
+        if (doUpdateUrl) {
+            const search = getCurrentSearchState();
+            updateUrl({ ...search, memory: memoryId }, { push: pushHistory });
+        }
     } catch (error) {
         showToast('Failed to load memory: ' + error.message, 'error');
         content.innerHTML = '<div class="error">Failed to load memory</div>';
     }
+}
+
+// Back/forward navigation — re-render detail panel from URL state.
+// Does NOT update the URL (we're responding to a URL change, not initiating one).
+function handlePopState() {
+    const state = getUrlState();
+    if (state.memory) {
+        showDetail(state.memory, { updateUrl: false });
+    } else {
+        document.getElementById('detail-panel').style.display = 'none';
+        currentMemory = null;
+    }
+}
+
+// Copy a shareable URL for the current memory to the clipboard.
+// The URL includes only ?memory=<id> — search params are personal context,
+// not part of the shareable memory link.
+function copyLink(memoryId) {
+    const url = `${window.location.origin}/?memory=${memoryId}`;
+    if (!navigator.clipboard) {
+        showToast('Clipboard not available — copy URL from address bar', 'info');
+        return;
+    }
+    navigator.clipboard.writeText(url)
+        .then(() => showToast('Link copied to clipboard', 'success'))
+        .catch(() => showToast('Failed to copy link', 'error'));
 }
 
 // Create form

@@ -2,16 +2,18 @@
 
 Browser-based OAuth flow via Keycloak (authorization_code + PKCE grant):
   1. User visits / → static UI shell loads (no sensitive data)
-  2. JS calls /api/* → 401 if not authenticated → JS redirects to /login
-  3. /login → redirect to Keycloak authorization endpoint (with PKCE challenge)
+  2. JS calls /api/* → 401 if not authenticated → JS redirects to /login?next=<current URL>
+  3. /login → store `next` in session → redirect to Keycloak (PKCE challenge)
   4. User logs in at Keycloak → redirected back to /auth/callback
-  5. /auth/callback → exchange code + PKCE verifier for tokens → store in session → redirect /
+  5. /auth/callback → exchange code+PKCE verifier → store session → redirect to `next` (default /)
   6. JS retries /api/* with session cookie → succeeds
 
 Security:
 - PKCE (S256) protects against authorization-code interception even for
   confidential clients (RFC 9700 / OAuth 2.1 recommendation).
 - OAuth `state` parameter prevents login CSRF (random, single-use, session-stored).
+- `next` param validated by _safe_redirect_path to prevent open-redirect attacks
+  (only same-origin relative paths allowed; //evil.com/ and https://evil.com/ → /).
 - Session cookies are signed + encrypted by SessionMiddleware using session_secret.
 - Access tokens stored in session, used for DB operations.
 
@@ -107,20 +109,46 @@ def _redirect_uri() -> str:
     return os.getenv("REMEMBER_OAUTH_REDIRECT_URI", "https://remember.cdd.net.au/auth/callback")
 
 
+def _safe_redirect_path(path: str | None) -> str:
+    """Validate a user-supplied redirect target is a safe relative path.
+
+    Prevents open-redirect attacks: a ``next`` value like ``https://evil.com/``
+    or ``//evil.com/`` (protocol-relative) would send the user to an external
+    site after login. Only same-origin relative paths are allowed.
+
+    Rules:
+    - Must start with ``/``
+    - Must NOT start with ``//`` (protocol-relative → external)
+    - Must NOT start with ``/\\`` (some browsers treat ``\\`` as ``/``)
+    """
+    if not path or not path.startswith("/"):
+        return "/"
+    if path.startswith("//") or path.startswith("/\\"):
+        return "/"
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Auth routes
 # ---------------------------------------------------------------------------
 
 @app.get("/login")
-async def login(request: Request):
+async def login(request: Request, next: str | None = None):
     """Redirect to Keycloak authorization endpoint.
 
     Includes:
     - Random `state` parameter to prevent login CSRF (stored in session, verified on callback)
     - PKCE code_challenge (S256) to protect against authorization-code interception
+    - Optional ``next`` query param: a relative path to redirect to after auth.
+      Stored in the session and used by /auth/callback. Validated by
+      _safe_redirect_path to prevent open-redirect attacks.
     """
     if not _keycloak_enabled():
-        return RedirectResponse("/")
+        return RedirectResponse(_safe_redirect_path(next))
+
+    # Preserve the user's intended destination across the OAuth round-trip.
+    # Validated to prevent open-redirect (e.g. next=https://evil.com/).
+    request.session["oauth_next"] = _safe_redirect_path(next)
 
     # Generate a random state parameter to prevent login CSRF
     state = secrets.token_urlsafe(32)
@@ -219,7 +247,11 @@ async def auth_callback(
     request.session["refresh_token"] = tokens.get("refresh_token", "")
     request.session["user_id"] = str(user_id)
 
-    return RedirectResponse("/")
+    # Redirect to the user's intended destination (default /).
+    # oauth_next is set by /login from the ?next query param, validated by
+    # _safe_redirect_path to prevent open-redirect.
+    next_path = request.session.pop("oauth_next", "/")
+    return RedirectResponse(_safe_redirect_path(next_path))
 
 
 @app.get("/logout")

@@ -3,7 +3,7 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
 
-from remember.web import app
+from remember.web import app, _safe_redirect_path
 
 
 @pytest.mark.asyncio
@@ -104,3 +104,51 @@ async def test_auth_status_unauthenticated():
         assert response.status_code == 200
         data = response.json()
         assert data["authenticated"] is False
+
+
+# ---------------------------------------------------------------------------
+# _safe_redirect_path — open-redirect prevention
+# ---------------------------------------------------------------------------
+
+def test_safe_redirect_path_accepts_relative():
+    """Valid relative paths pass through unchanged."""
+    assert _safe_redirect_path("/?memory=abc-123") == "/?memory=abc-123"
+    assert _safe_redirect_path("/memories") == "/memories"
+    assert _safe_redirect_path("/") == "/"
+
+
+def test_safe_redirect_path_rejects_external():
+    """Absolute URLs (https://evil.com) are rejected → /."""
+    assert _safe_redirect_path("https://evil.com/") == "/"
+    assert _safe_redirect_path("http://evil.com/") == "/"
+    assert _safe_redirect_path("https://evil.com/?memory=abc") == "/"
+
+
+def test_safe_redirect_path_rejects_protocol_relative():
+    """Protocol-relative URLs (//evil.com) are rejected → /.
+
+    Browsers treat //evil.com/ as https://evil.com/ — a classic open-redirect
+    vector. Must be blocked even though it starts with /.
+    """
+    assert _safe_redirect_path("//evil.com/") == "/"
+    assert _safe_redirect_path("//evil.com/?memory=abc") == "/"
+
+
+def test_safe_redirect_path_rejects_backslash():
+    """Backslash-prefixed URLs (/\\evil.com) are rejected → /.
+
+    Some browsers treat \\ as /, so /\\evil.com becomes //evil.com → external.
+    """
+    assert _safe_redirect_path("/\\evil.com/") == "/"
+
+
+def test_safe_redirect_path_rejects_none_and_empty():
+    """None and empty strings default to /."""
+    assert _safe_redirect_path(None) == "/"
+    assert _safe_redirect_path("") == "/"
+
+
+def test_safe_redirect_path_preserves_query_and_fragment():
+    """Query params and fragments on valid relative paths are preserved."""
+    assert _safe_redirect_path("/?memory=abc-123&type=project") == "/?memory=abc-123&type=project"
+    assert _safe_redirect_path("/?q=test&memory=def#section") == "/?q=test&memory=def#section"

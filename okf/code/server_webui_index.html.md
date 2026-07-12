@@ -2,7 +2,7 @@
 type: Source Code
 description: "<!DOCTYPE html>"
 resource: server/webui/index.html
-timestamp: 2026-07-10T02:44:34Z
+timestamp: 2026-07-12T02:15:00Z
 ---
 
 # index
@@ -55,3 +55,7 @@ Source path: `server/webui/index.html`
 ```
 
 *…truncated — full source at `server/webui/index.html`*
+
+## Detail panel — Copy link button
+
+The detail panel header includes a "🔗 Copy link" button (`id="copy-link-btn"`) that copies a shareable URL (`${origin}/?memory=<id>`) to the clipboard. Wired up in `showDetail()` via `copyLink(memoryId)`. Search params are excluded from the copied URL — only `?memory=<id>` is included, since search query is personal context, not part of the shareable memory link.
