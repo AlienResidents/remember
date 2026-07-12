@@ -2,7 +2,7 @@
 type: Configuration
 description: "# REMEMBER Server Environment Variables"
 resource: server/.env.example
-timestamp: 2026-07-12T01:15:00Z
+timestamp: 2026-07-12T01:50:00Z
 ---
 
 # .env
@@ -33,6 +33,13 @@ REMEMBER_AUTH__KEYCLOAK_REALM=master
 # For MCP server: the machine client ID (azp claim check)
 # For Web UI: the browser client ID (authorization_code flow)
 REMEMBER_AUTH__KEYCLOAK_CLIENT_ID=remember-pi
+
+# Auth — MCP server JWKS override (optional)
+# Set to an in-cluster service URL to bypass ingress for JWKS fetches.
+# If empty, derived from KEYCLOAK_AUTHORITY. The issuer claim is always
+# derived from KEYCLOAK_AUTHORITY (must match the external URL in JWTs).
+# Example: http://keycloak.keycloak.svc.cluster.local:8080/realms/master/protocol/openid-connect/certs
+REMEMBER_AUTH__KEYCLOAK_JWKS_URL=
 # For Web UI only: client secret for authorization_code exchange
 REMEMBER_AUTH__KEYCLOAK_CLIENT_SECRET=
 

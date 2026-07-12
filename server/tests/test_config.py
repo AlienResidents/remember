@@ -69,13 +69,31 @@ def test_settings_keycloak_enabled(monkeypatch):
     assert settings.auth.keycloak_enabled is False
 
 
-def test_settings_keycloak_urls():
-    """Test Keycloak URL construction."""
+def test_settings_keycloak_urls(monkeypatch):
+    """Test Keycloak URL construction — derived from authority when not set."""
+    monkeypatch.setenv("REMEMBER_AUTH__KEYCLOAK_AUTHORITY", "https://kc.example.com")
+    monkeypatch.setenv("REMEMBER_AUTH__KEYCLOAK_REALM", "myrealm")
     settings = Settings()
-    settings.auth.keycloak_authority = "https://kc.example.com"
-    settings.auth.keycloak_realm = "myrealm"
 
     assert settings.auth.keycloak_jwks_url == (
         "https://kc.example.com/realms/myrealm/protocol/openid-connect/certs"
     )
+    assert settings.auth.keycloak_issuer == "https://kc.example.com/realms/myrealm"
+
+
+def test_settings_keycloak_jwks_url_override(monkeypatch):
+    """Test that explicit JWKS URL takes precedence over derived (internal bypass)."""
+    monkeypatch.setenv("REMEMBER_AUTH__KEYCLOAK_AUTHORITY", "https://kc.example.com")
+    monkeypatch.setenv("REMEMBER_AUTH__KEYCLOAK_REALM", "myrealm")
+    monkeypatch.setenv(
+        "REMEMBER_AUTH__KEYCLOAK_JWKS_URL",
+        "http://keycloak.keycloak.svc.cluster.local:8080/realms/myrealm/protocol/openid-connect/certs",
+    )
+    settings = Settings()
+
+    # JWKS URL uses the override (internal service URL, bypasses ingress)
+    assert settings.auth.keycloak_jwks_url == (
+        "http://keycloak.keycloak.svc.cluster.local:8080/realms/myrealm/protocol/openid-connect/certs"
+    )
+    # Issuer still derived from authority (must match external iss claim in JWTs)
     assert settings.auth.keycloak_issuer == "https://kc.example.com/realms/myrealm"

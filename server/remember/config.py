@@ -1,6 +1,6 @@
 """Configuration settings."""
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -64,25 +64,34 @@ class AuthSettings(BaseSettings):
         default="",
         description="Secret key for signing session cookies (web UI only)",
     )
+    keycloak_jwks_url: str = Field(
+        default="",
+        description="JWKS endpoint. If empty, derived from keycloak_authority. "
+        "Set to an in-cluster service URL to bypass ingress for JWKS fetches.",
+    )
+    keycloak_issuer: str = Field(
+        default="",
+        description="Expected JWT iss claim. If empty, derived from keycloak_authority. "
+        "Must match the issuer that signed the tokens (typically the external URL).",
+    )
+
+    @model_validator(mode="after")
+    def _derive_keycloak_urls(self) -> "AuthSettings":
+        """Derive keycloak_jwks_url and keycloak_issuer from authority if not set."""
+        if self.keycloak_authority:
+            base = f"{self.keycloak_authority}/realms/{self.keycloak_realm}"
+            if not self.keycloak_issuer:
+                self.keycloak_issuer = base
+            if not self.keycloak_jwks_url:
+                self.keycloak_jwks_url = (
+                    f"{base}/protocol/openid-connect/certs"
+                )
+        return self
 
     @property
     def keycloak_enabled(self) -> bool:
         """Whether Keycloak JWT validation is active."""
         return bool(self.keycloak_authority) and not self.dev_mode
-
-    @property
-    def keycloak_jwks_url(self) -> str:
-        """Keycloak JWKS endpoint for fetching public keys."""
-        if not self.keycloak_authority:
-            return ""
-        return f"{self.keycloak_authority}/realms/{self.keycloak_realm}/protocol/openid-connect/certs"
-
-    @property
-    def keycloak_issuer(self) -> str:
-        """Expected JWT issuer claim."""
-        if not self.keycloak_authority:
-            return ""
-        return f"{self.keycloak_authority}/realms/{self.keycloak_realm}"
 
 
 class SearchSettings(BaseSettings):
