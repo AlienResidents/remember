@@ -39,6 +39,8 @@ get different `sub` values for the same human, and identity convergence breaks
 silently. Do NOT enable pairwise subjects on either client.
 """
 
+import base64
+import hashlib
 import json
 import os
 import secrets
