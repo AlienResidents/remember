@@ -32,7 +32,7 @@ import os
 import secrets
 import uuid
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Depends
@@ -112,20 +112,28 @@ def _redirect_uri() -> str:
 def _safe_redirect_path(path: str | None) -> str:
     """Validate a user-supplied redirect target is a safe relative path.
 
-    Prevents open-redirect attacks: a ``next`` value like ``https://evil.com/``
-    or ``//evil.com/`` (protocol-relative) would send the user to an external
-    site after login. Only same-origin relative paths are allowed.
+    Prevents open-redirect attacks (CWE-601): a ``next`` value like
+    ``https://evil.com/`` or ``//evil.com/`` (protocol-relative) would send
+    the user to an external site after login. Only same-origin relative
+    paths are allowed.
 
-    Rules:
-    - Must start with ``/``
-    - Must NOT start with ``//`` (protocol-relative → external)
-    - Must NOT start with ``/\\`` (some browsers treat ``\\`` as ``/``)
+    Uses :func:`urllib.parse.urlparse` after normalizing backslashes and
+    stripping control characters (tab, newline) that browsers remove from
+    URLs per the WHATWG URL spec — ``/\\t//evil.com`` becomes ``//evil.com``
+    in a browser but ``urlparse`` alone sees it as a relative path.
     """
     if not path or not path.startswith("/"):
         return "/"
-    if path.startswith("//") or path.startswith("/\\"):
+    # Browsers treat backslash as forward slash and strip control characters
+    # (tab, newline, CR, NUL) from URLs. Normalize before parsing so these
+    # don't bypass urlparse's netloc/scheme detection.
+    normalized = path.replace("\\", "/")
+    for ch in "\t\n\r\x00":
+        normalized = normalized.replace(ch, "")
+    parsed = urlparse(normalized)
+    if parsed.scheme or parsed.netloc:
         return "/"
-    return path
+    return normalized
 
 
 # ---------------------------------------------------------------------------

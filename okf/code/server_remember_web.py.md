@@ -2,7 +2,7 @@
 type: Source Code
 description: "Web UI server for REMEMBER."
 resource: server/remember/web.py
-timestamp: 2026-07-12T02:15:00Z
+timestamp: 2026-07-12T03:30:00Z
 ---
 
 # web
@@ -46,7 +46,7 @@ import os
 import secrets
 import uuid
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import FastAPI, Request, HTTPException, Depends
@@ -74,6 +74,6 @@ from remember.tools import (
 ## Key functions
 
 - `_redirect_uri()` — Keycloak callback URL (env-configurable, defaults to `https://remember.cdd.net.au/auth/callback`).
-- `_safe_redirect_path(path)` — validates a `next` redirect target is a safe relative path. Rejects `None`, empty, non-`/`-prefixed, `//evil.com` (protocol-relative), `/\\evil.com` (backslash). Returns `/` on rejection. Prevents open-redirect attacks on the `/login?next=` flow.
+- `_safe_redirect_path(path)` — validates a `next` redirect target is a safe relative path (CWE-601 prevention). Normalizes backslashes to forward slashes and strips control characters (tab, newline, CR, NUL) before parsing with `urlparse` — browsers strip these per WHATWG URL spec, which can turn `/\t/evil.com` into `//evil.com` → external redirect. Rejects any path with a `scheme` or `netloc` after normalization. Returns `/` on rejection, the normalized path otherwise. Prevents open-redirect attacks on the `/login?next=` flow.
 - `login(request, next)` — accepts optional `next` query param, stores it in session as `oauth_next`, redirects to Keycloak.
 - `auth_callback(request)` — exchanges code for tokens, reads `oauth_next` from session, redirects to `_safe_redirect_path(next)`.

@@ -142,6 +142,29 @@ def test_safe_redirect_path_rejects_backslash():
     assert _safe_redirect_path("/\\evil.com/") == "/"
 
 
+def test_safe_redirect_path_rejects_tab_bypass():
+    """Control-char-injected URLs (/\t/evil.com) are rejected → /.
+
+    Browsers strip tabs/newlines from URLs per the WHATWG URL spec, so
+    /\t/evil.com becomes //evil.com → external site. urlparse alone doesn't
+    catch this (it strips the tab and sees a relative path), so
+    _safe_redirect_path must strip control chars before parsing.
+    """
+    assert _safe_redirect_path("/\t/evil.com") == "/"
+    assert _safe_redirect_path("/\n/evil.com") == "/"
+    assert _safe_redirect_path("/\r/evil.com") == "/"
+
+
+def test_safe_redirect_path_normalizes_backslashes():
+    """Backslashes in otherwise-safe paths are normalized to forward slashes.
+
+    Browsers treat \\ as / in URL paths, so /some\\path is equivalent to
+    /some/path. _safe_redirect_path returns the normalized form.
+    """
+    assert _safe_redirect_path("/some\\path") == "/some/path"
+    assert _safe_redirect_path("/a\\b\\c") == "/a/b/c"
+
+
 def test_safe_redirect_path_rejects_none_and_empty():
     """None and empty strings default to /."""
     assert _safe_redirect_path(None) == "/"
