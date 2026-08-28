@@ -69,6 +69,11 @@ filterwarnings = [
     "ignore::PendingDeprecationWarning",
 ]
 
+[tool.uv]
+# Dependabot: cryptography must resolve to >=50.0.0 (security fix);
+# it is a transitive dep via PyJWT[crypto]/authlib/joserfc.
+constraint-dependencies = ["cryptography>=50.0.0"]
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100
