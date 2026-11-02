@@ -24,7 +24,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-    "fastmcp>=3.4.3",
+    "fastmcp>=3.4.10,<4",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.50.1",
     "jinja2>=3.1.0",
@@ -72,7 +72,12 @@ filterwarnings = [
 [tool.uv]
 # Dependabot: cryptography must resolve to >=50.0.0 (security fix);
 # it is a transitive dep via PyJWT[crypto]/authlib/joserfc.
-constraint-dependencies = ["cryptography>=50.0.0"]
+constraint-dependencies = [
+    "authlib>=1.9.1",
+    "cryptography>=50.0.0",
+    "fastmcp-slim>=3.4.10,<4",
+    "opentelemetry-api>=1.45.1",
+]
 
 [tool.ruff]
 target-version = "py311"
